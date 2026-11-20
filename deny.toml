@@ -23,6 +23,8 @@ allow = [
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Internal path dependencies between unpublished workspace crates are fine.
+allow-wildcard-paths = true
 # Reclaim has no network code (ARCHITECTURE §9). Async runtimes are excluded too (ADR-0001).
 deny = [
     { name = "reqwest" },
