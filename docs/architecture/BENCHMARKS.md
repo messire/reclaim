@@ -8,11 +8,11 @@ Only one physical machine is available (owner decision, 2026-11-20). Profiles ar
 
 | Profile | Purpose | Setup |
 |---|---|---|
-| **RH-OWNER** | The reference machine for all footprint targets (B1–B8) | The owner's machine as is; specs recorded in `docs/benchmarks/reference-hardware.md` (to be filled in) |
-| **VM-LOW** | Memory-constrained case, where trimming matters most | Hyper-V VM on RH-OWNER: 4 vCPU, 8 GiB (and 4 GiB) RAM, Windows 11 23H2+. Used for effectiveness scenarios S5 and pressure tests |
-| **VM-CLEAN** | Clean-install compatibility, no runtimes | Hyper-V VMs on RH-OWNER: Windows 10 22H2 and Windows 11, no VC++ redistributable, no .NET extras |
+| **RH-OWNER** | The reference machine for all footprint targets (B1–B8) | The owner's machine as is; specs in [`docs/benchmarks/reference-hardware.md`](../benchmarks/reference-hardware.md): laptop, i7-11800H, 16 GiB, NVMe PCIe 4.0, Windows 11 Home 24H2 |
+| **VM-LOW** | Memory-constrained case, where trimming matters most | VirtualBox VM on RH-OWNER: 4 vCPU, 8 GiB (and 4 GiB) RAM, Windows 11 23H2+. Used for effectiveness scenarios S5 and pressure tests |
+| **VM-CLEAN** | Clean-install compatibility, no runtimes | VirtualBox VMs on RH-OWNER: Windows 10 22H2 and Windows 11, no VC++ redistributable, no .NET extras |
 
-Limitations, stated in every summary: VM results are not equivalent to a real low-end laptop (virtualized disk, no battery), and one machine cannot show hardware variance. Scenario S8 (battery) is skipped unless RH-OWNER is a laptop. Free Hyper-V needs Windows Pro/Enterprise/Education; on Home, VirtualBox is used instead.
+Limitations, stated in every summary: VM results are not equivalent to a real low-end laptop (virtualized disk, no battery), and one machine cannot show hardware variance. RH-OWNER is a laptop, so scenario S8 (battery) is included. The host runs Windows 11 Home, which has no Hyper-V, so VMs use VirtualBox.
 
 Each result file records: CPU, RAM, disk, Windows build, power plan, AC/battery, Reclaim commit hash, toolchain version, background apps.
 
@@ -83,7 +83,7 @@ Captured per arm (matches ACCEPTANCE §3):
 | S5 | W-PRESSURE | Under high pressure, does trimming help the foreground probe's latency or hurt it? |
 | S6 | W-PROT | Are protected/elevated/other-user processes skipped and reported correctly? |
 | S7 | W-RACE | No crash, no wrong-process action, outcomes `Exited` reported |
-| S8 | RH-OWNER on battery (only if it is a laptop) | Cost of modified-page writes (disk activity) |
+| S8 | RH-OWNER on battery | Cost of modified-page writes (disk activity) |
 
 **Pass condition** (from ACCEPTANCE §3): correct and safe behaviour plus honest reporting. A lower working set alone is not a pass. Any arm where the `latency` probe's p95 pass time after trimming exceeds the control by > 20 % is recorded as a **regression**, regardless of available memory.
 

@@ -7,7 +7,7 @@
 
 | # | Milestone | Outcome | Depends on | Relative size |
 |---|---|---|---|---|
-| M0 | Foundations and spikes | Workspace, CI, license; UI toolkit chosen on evidence; API behaviour verified | Q3 (machine specs) | M |
+| M0 | Foundations and spikes | Workspace, CI, license; UI toolkit chosen on evidence; API behaviour verified | — | M |
 | M1 | Core domain | Pure, tested model, policy, analysis and report wording | M0 workspace | M |
 | M2 | Windows platform adapter | Real metrics, enumeration, identity, trimming with integration tests | M1 ports | M |
 | M3 | Engine and CLI | Threaded engine, run state machine, follow-up, persistence; `reclaim-cli` usable end-to-end | M1, M2 | L |
@@ -132,7 +132,7 @@ Exit: MVP release candidate tagged; all ACCEPTANCE §1, §2 (or documented devia
 |---|---|---|---|
 | Q1 | Project license? | Determines whether Slint can be used under GPLv3 or needs the royalty-free/commercial license; release notices | **Decided 2026-11-20:** free distribution → MIT. If Slint wins, it is used under its royalty-free license with the required attribution (About screen) **[verify current terms in M0]** |
 | Q2 | Minimum supported Windows version? | API availability, test matrix | **Decided 2026-11-20:** Windows 10 22H2 and Windows 11 23H2+ |
-| Q3 | Which physical machines can serve as RH-LOW / RH-MID? | Performance targets are unverifiable without them | **Partly decided 2026-11-20:** one physical machine (the owner's) is the reference `RH-OWNER`; VMs on it cover clean-install and low-RAM cases (BENCHMARKS §1). Its specs (CPU, RAM, disk, Windows build) still need to be recorded |
+| Q3 | Which machines are the reference hardware? | Performance targets are unverifiable without them | **Decided 2026-11-20:** the owner's laptop (`RH-OWNER`, see `docs/benchmarks/reference-hardware.md`) plus VirtualBox VMs on it for low-RAM and clean-install cases |
 | Q4 | Preference if both toolkits pass the gates? | Portability vs smallest footprint | Slint (one UI for all platforms) |
 | Q5 | Close (X) behaviour by default? | Tray UX | **Decided 2026-11-20:** Close minimizes to tray (ARCHITECTURE §8.2) |
 | Q6 | Is an elevated broker wanted later? | Scope of post-MVP work and threat review | Not planned until users ask |
