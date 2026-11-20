@@ -47,7 +47,7 @@ DoD coverage: ACC §6 (ADR, technology comparison with evidence).
 Exit: ≥ 90 % line coverage in `core` (pure logic), all rules covered by named tests.
 DoD coverage: ACC §1 (definitions, per-process outcomes, WS ≠ commit ≠ performance), §6 (unit tests).
 
-### M2 — Windows adapter (`reclaim-platform-windows`)
+### M2 — Windows adapter (`reclaim-platform-windows`) — done 2026-11-20 on the CI image (local Windows 10/11 run pending)
 
 1. RAII `OwnedHandle`; error mapping to `PlatformError`/`OpenError`/`ReclaimError`.
 2. System metrics (`GlobalMemoryStatusEx`, `GetPerformanceInfo`), pressure notification handle.
@@ -61,7 +61,7 @@ DoD coverage: ACC §1 (definitions, per-process outcomes, WS ≠ commit ≠ perf
 Exit: integration suite green on Windows 10 and 11 (CI image + one local machine).
 DoD coverage: ACC §1 (skip/report, no elevation, never terminate), §4 (races), §6 (integration tests).
 
-### M3 — Engine and CLI (`reclaim-engine`, `reclaim-cli`)
+### M3 — Engine and CLI (`reclaim-engine`, `reclaim-cli`) — done 2026-11-20 (soak B8 moved to M5; full CLI trim on the owner's laptop pending)
 
 1. Engine thread with command queue + waitable timer + pressure handle wait loop.
 2. Sampling cadence per view state (ARCH §4.1).

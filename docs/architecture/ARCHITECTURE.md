@@ -85,6 +85,7 @@ Additional workspace members:
 
 - **UI thread** — owned by the toolkit. Never performs OS enumeration or trimming. Receives `Event`s through the toolkit's thread-safe "invoke on UI thread" mechanism.
 - **Engine thread** — one long-lived worker. Owns all OS handles and the run state machine. Blocks in `WaitForMultipleObjects` (Windows adapter) on: command queue event, one OS memory-resource notification (low or high, see §6.1), and a single waitable timer. No busy loops, no async runtime.
+  *As built (M3):* the engine blocks in a channel `recv_timeout` until the next deadline (sample, follow-up) instead of `WaitForMultipleObjects`, which keeps `reclaim-engine` free of OS calls and testable with the fake clock. The memory-resource notification is read (non-blocking query) at each system sample rather than waited on, so a pressure change shows at the next sample (at most 1 s while visible) and costs nothing while hidden.
 - **No thread pool.** Trimming is sequential per process: parallel trimming would only increase paging I/O bursts and makes measurements harder to attribute.
 
 Commands (UI → engine), selected:
