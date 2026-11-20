@@ -1,6 +1,8 @@
 # cargo-deny configuration (ARCHITECTURE §11, ADR-0001).
 [graph]
 all-features = true
+# Only the platforms Reclaim builds for; platform-specific deps of other targets are not linked.
+targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
 
 [advisories]
 version = 2
@@ -18,6 +20,22 @@ allow = [
     "ISC",
     "Zlib",
     "Unicode-3.0",
+    "BSL-1.0",
+    "Unlicense",
+]
+
+# Slint is only used by the M0 UI spike so far. If it is chosen (ADR-0001), Reclaim uses it under
+# the Slint Royalty-free Desktop License 2.0, which requires attribution in the About screen.
+exceptions = [
+    { crate = "slint", allow = ["LicenseRef-Slint-Royalty-free-2.0"] },
+    { crate = "slint-macros", allow = ["LicenseRef-Slint-Royalty-free-2.0"] },
+    { crate = "i-slint-backend-selector", allow = ["LicenseRef-Slint-Royalty-free-2.0"] },
+    { crate = "i-slint-backend-winit", allow = ["LicenseRef-Slint-Royalty-free-2.0"] },
+    { crate = "i-slint-common", allow = ["LicenseRef-Slint-Royalty-free-2.0"] },
+    { crate = "i-slint-compiler", allow = ["LicenseRef-Slint-Royalty-free-2.0"] },
+    { crate = "i-slint-core", allow = ["LicenseRef-Slint-Royalty-free-2.0"] },
+    { crate = "i-slint-core-macros", allow = ["LicenseRef-Slint-Royalty-free-2.0"] },
+    { crate = "i-slint-renderer-software", allow = ["LicenseRef-Slint-Royalty-free-2.0"] },
 ]
 
 [bans]

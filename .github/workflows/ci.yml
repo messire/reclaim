@@ -97,3 +97,31 @@ jobs:
         with:
           name: api-spike-exe
           path: target/release/api-spike.exe
+
+  ui-spike:
+    name: UI toolkit spike (M0)
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build spikes and harness
+        run: cargo build --release --locked -p spike-ui-slint -p spike-ui-win32 -p reclaim-bench --bin ui-bench
+      - name: Measure Win32
+        shell: pwsh
+        run: ./target/release/ui-bench.exe --exe target/release/spike-ui-win32.exe --label "Native Win32" --runs 10 --idle-secs 60 --out ui-win32.md
+      - name: Measure Slint
+        shell: pwsh
+        run: ./target/release/ui-bench.exe --exe target/release/spike-ui-slint.exe --label "Slint (software renderer)" --runs 10 --idle-secs 60 --out ui-slint.md
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: Get-Content ui-*.md -ErrorAction SilentlyContinue | Out-File -Append $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-spike
+          path: |
+            ui-*.md
+            target/release/spike-ui-win32.exe
+            target/release/spike-ui-slint.exe
+            target/release/ui-bench.exe

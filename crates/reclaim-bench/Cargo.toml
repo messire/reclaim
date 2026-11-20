@@ -22,6 +22,10 @@ undocumented_unsafe_blocks = "deny"
 name = "api-spike"
 path = "src/bin/api_spike/main.rs"
 
+[[bin]]
+name = "ui-bench"
+path = "src/bin/ui_bench/main.rs"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [
     "Win32_Foundation",
