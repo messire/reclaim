@@ -75,7 +75,7 @@ DoD coverage: ACC §1 (skip/report, no elevation, never terminate), §4 (races),
 Exit: a full trim with follow-up works from the CLI on a real machine; soak shows no growth.
 DoD coverage: ACC §1 (before/after/follow-up, cancel), §4 (no leaks, local logs).
 
-### M4 — Desktop UI and tray (`reclaim-app`)
+### M4 — Desktop UI and tray (`reclaim-app`) — done 2026-11-20 (CI: warm start 21 ms, idle 0 % CPU, 6.8 MiB visible / 4.1 MiB in tray; exe 13 MiB, above the 10 MiB preference, see B6)
 
 1. ViewModels (Overview, Processes, Plan, Result, History, Settings) with tests against the fake engine.
 2. Toolkit adapter for the chosen toolkit; string resources; formatter.
@@ -87,7 +87,7 @@ DoD coverage: ACC §1 (before/after/follow-up, cancel), §4 (no leaks, local log
 Exit: all MVP screens implemented; B1–B3 within targets or deviations documented.
 DoD coverage: ACC §1 (responsive UI), §2, §4 (tray lifecycle), PROD §7 (localization-ready).
 
-### M5 — Benchmarks and effectiveness (`reclaim-bench`)
+### M5 — Benchmarks and effectiveness (`reclaim-bench`) — harness done 2026-11-20 (probes, S1–S8 runner, soak B8, CI smoke); runs on RH-OWNER pending, see `docs/benchmarks/RUNNING.md`
 
 1. Harness for B1–B8 with result archiving.
 2. Probes `alloc-touch`, `latency`, `exit-after`.
@@ -98,7 +98,7 @@ DoD coverage: ACC §1 (responsive UI), §2, §4 (tray lifecycle), PROD §7 (loca
 Exit: published summary covering all scenarios; any regression documented with a mitigation or an explicit acceptance.
 DoD coverage: ACC §2, §3.
 
-### M6 — Hardening and release
+### M6 — Hardening and release — release workflow, notices, checklist and README done 2026-11-20; VM checklist run and first tag pending
 
 1. Manual test checklist `docs/testing/MANUAL_CHECKLIST.md` executed on VM-CLEAN (Win10, Win11) as standard user.
 2. Final soak B8; clean-VM launch without runtimes.
