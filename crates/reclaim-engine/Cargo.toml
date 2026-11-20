@@ -13,6 +13,8 @@ workspace = true
 
 [dependencies]
 reclaim-core.workspace = true
+serde.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 reclaim-platform-fake.workspace = true
