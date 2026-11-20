@@ -43,6 +43,8 @@ Severity: **Blocker** = violates a stated requirement or DoD item; **Major** = l
 | F23 | Minor | Tray icon disappears after Explorer restarts | ACCEPTANCE §4: predictable tray lifecycle | Handle the `TaskbarCreated` registered message and re-add the icon (ARCH §8.2) |
 | F24 | Minor | Follow-up samples taken late after sleep/resume or heavy load would be presented as "+60 s" | Honest reporting | Samples carry actual timestamps; a sample more than 2 s late is flagged in the report (ARCH §7) |
 | F25 | Minor | Held handles to processes that exit during follow-up keep kernel process objects alive up to 60 s | Resource hygiene | Accepted (bounded, small); handles released on Finalized or Quit; covered by the soak test (ARCH §7) |
+| F27 | Major | Memory-resource notifications are level-triggered; waiting on a signaled low-memory handle again would busy-loop under sustained pressure (found in PR review) | NFR: near-zero idle CPU | Low/high handle swap plus a 30 s re-check timer while low (ARCH §6.1) |
+| F28 | Minor | `WaitForSingleObject` exit check needs `SYNCHRONIZE`, which the trim handle did not request (found in PR review) | ACC §4: exit races handled | `SYNCHRONIZE` added to the open rights (ARCH §6.1, §7) |
 | F26 | Minor | Users may consider image names in history sensitive | ACCEPTANCE §4 | Setting "Keep run history" (default on) and "Clear history" (ARCH §9) |
 
 ## 3. Residual risks accepted

@@ -20,7 +20,7 @@
 | Capability | API | Required access | Works for | Fails / limits | Notes |
 |---|---|---|---|---|---|
 | System RAM / commit | `GlobalMemoryStatusEx`, `GetPerformanceInfo` | none | — | — | µs cost; safe at startup |
-| Memory pressure signal | `CreateMemoryResourceNotification`, `QueryMemoryResourceNotification` | none | — | Coarse (low/high thresholds chosen by OS) | Wait-able handle: zero-cost idle monitoring |
+| Memory pressure signal | `CreateMemoryResourceNotification`, `QueryMemoryResourceNotification` | none | — | Coarse (low/high thresholds chosen by OS); level-triggered, stays signaled while the condition holds | Wait-able handle; the engine swaps low/high handles to avoid re-waking (ARCH §6.1) |
 | Standby / modified breakdown | PDH counters under `\Memory\` | none **[verify]** | — | Counter names are localized; use `PdhAddEnglishCounterW`. PDH loads extra DLLs (~MBs) | Load lazily, unload when hidden |
 | Paging input rate | PDH `\Memory\Pages Input/sec` | none | — | System-wide only | Cost indicator during follow-up |
 | Process list | `CreateToolhelp32Snapshot` | none | all processes (names, PIDs) | — | Documented; returns image name only |
@@ -29,7 +29,7 @@
 | Critical flag | `IsProcessCritical` | `PROCESS_QUERY_LIMITED_INFORMATION` | as above | Windows 8.1+ | Treat failure as "unknown → protected" |
 | Per-process I/O | `GetProcessIoCounters` | `PROCESS_QUERY_INFORMATION` or limited **[verify]** | own-user | — | Optional cost indicator |
 | Foreground process | `GetForegroundWindow` + `GetWindowThreadProcessId` | none | — | Null during secure desktop / lock screen | Exclude by default |
-| Trim working set | `SetProcessWorkingSetSize` / `EmptyWorkingSet` | `PROCESS_SET_QUOTA` + query | own-user, same or lower integrity | Elevated (high-IL) processes from a medium-IL caller; other users; services; protected processes (PP/PPL) → `ERROR_ACCESS_DENIED` | Exactly the least-privilege boundary we want |
+| Trim working set | `SetProcessWorkingSetSize` / `EmptyWorkingSet` | `PROCESS_SET_QUOTA` + query (+ `SYNCHRONIZE` for exit detection) | own-user, same or lower integrity | Elevated (high-IL) processes from a medium-IL caller; other users; services; protected processes (PP/PPL) → `ERROR_ACCESS_DENIED` | Exactly the least-privilege boundary we want |
 | Integrity level | `OpenProcessToken` + `GetTokenInformation(TokenIntegrityLevel)` | `PROCESS_QUERY_LIMITED_INFORMATION` + `TOKEN_QUERY` | own-user | Fails for many system processes | Used only to *predict* "requires elevation"; the open attempt is authoritative |
 
 ## 3. Capabilities deliberately not used in the MVP

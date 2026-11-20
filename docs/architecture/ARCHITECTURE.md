@@ -84,7 +84,7 @@ Additional workspace members:
 ## 4. Runtime and threading model
 
 - **UI thread** — owned by the toolkit. Never performs OS enumeration or trimming. Receives `Event`s through the toolkit's thread-safe "invoke on UI thread" mechanism.
-- **Engine thread** — one long-lived worker. Owns all OS handles and the run state machine. Blocks in `WaitForMultipleObjects` (Windows adapter) on: command queue event, OS low-memory notification, and a single waitable timer. No busy loops, no async runtime.
+- **Engine thread** — one long-lived worker. Owns all OS handles and the run state machine. Blocks in `WaitForMultipleObjects` (Windows adapter) on: command queue event, one OS memory-resource notification (low or high, see §6.1), and a single waitable timer. No busy loops, no async runtime.
 - **No thread pool.** Trimming is sequential per process: parallel trimming would only increase paging I/O bursts and makes measurements harder to attribute.
 
 Commands (UI → engine), selected:
@@ -240,8 +240,12 @@ trait Clock           { fn now(&self) -> Instant; }
 ### 6.1 Windows adapter (summary; details in `OS-CAPABILITIES.md`)
 
 - Enumeration: `CreateToolhelp32Snapshot` (names, PIDs) then `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `GetProcessMemoryInfo` per process. Processes that cannot be opened appear with metrics "not accessible".
-- Trimming: `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA)` → validate start time → `SetProcessWorkingSetSize(h, usize::MAX, usize::MAX)` (equivalent to `EmptyWorkingSet`; both documented). No hard working-set limits are ever set.
-- Pressure: `CreateMemoryResourceNotification(LowMemoryResourceNotification)` handle waited on by the engine.
+- Trimming: `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA | SYNCHRONIZE)` (`SYNCHRONIZE` is required for the zero-timeout exit check in §7) → validate start time → `SetProcessWorkingSetSize(h, usize::MAX, usize::MAX)` (equivalent to `EmptyWorkingSet`; both documented). No hard working-set limits are ever set.
+- Pressure: two handles, `LowMemoryResourceNotification` and `HighMemoryResourceNotification`. They are **level-triggered** (they stay signaled while the condition holds), so the engine never waits on a handle that is already signaled:
+  - state *Normal*: wait on the low-memory handle only;
+  - when it signals: publish `Pressure::Low`, remove the low handle from the wait set, wait on the high-memory handle instead, and arm one coalesced re-check timer (30 s) that calls `QueryMemoryResourceNotification` to detect a return to the middle band, where neither handle is signaled;
+  - when the high handle signals or the re-check finds low no longer signaled: publish the new state and go back to waiting on the low handle.
+  The engine therefore wakes at most once per state change, plus once every 30 s while memory stays low.
 - PDH: opened lazily only while the window is visible or a run follow-up is active; closed when hidden.
 - All handles are wrapped in an RAII type; no raw `HANDLE` escapes the crate.
 
@@ -257,7 +261,7 @@ Idle ──PlanRun──▶ Planned ──StartRun──▶ Running ──done�
 - **Running:** sequential loop over targets, largest working set first. Before each target, check the cancel flag; per-process time is bounded by the OS call itself.
 - **Cancel semantics:** a call in progress completes; remaining targets become `Cancelled`; follow-up sampling still runs for already-trimmed processes (so the user sees the rebound of what was done) unless the user cancels follow-up too.
 - **Concurrency:** only one run at a time. During FollowUp, a new run can be planned; starting it finalizes the current run early and marks the follow-up as truncated.
-- **Process exit during run:** detected by `WaitForSingleObject(h, 0)` / failed calls → `Failed(Exited)`; never an error dialog.
+- **Process exit during run:** detected by `WaitForSingleObject(h, 0)` on the `SYNCHRONIZE` handle (or `GetExitCodeProcess` as a fallback) / failed calls → `Failed(Exited)`; never an error dialog.
 - **Late samples:** every follow-up sample stores its actual timestamp; a sample more than 2 s later than its target (sleep/resume, heavy load) is flagged in the report instead of being presented as "+60 s" (review F24).
 - **Held handles:** handles of trimmed processes are kept until Finalized so identities stay valid; a process that exits meanwhile keeps only a small kernel object alive, released at Finalized or Quit (review F25).
 - **Internal errors:** each command is executed inside `catch_unwind`; a panic becomes an internal-error outcome in the run record and the engine stays alive (review F22).
