@@ -74,6 +74,8 @@ slint::slint! {
     }
 
     export component Tray inherits SystemTrayIcon {
+        in property <image> tray-icon;
+        icon: root.tray-icon;
         tooltip: "Reclaim";
         callback open();
         callback quit();
@@ -226,6 +228,7 @@ pub fn main() {
     let holder: Holder = Rc::new(std::cell::RefCell::new(None));
     let data: Data = Rc::new(std::cell::RefCell::new(rows()));
     let tray = Tray::new().expect("tray");
+    tray.set_tray_icon(tray_icon());
     {
         let (h, d) = (holder.clone(), data.clone());
         tray.on_open(move || open(&h, &d));
@@ -272,10 +275,55 @@ pub fn main() {
     open(&holder, &data);
     tray.show().expect("tray show");
     if let Some(name) = arg("--ready-event") {
-        // Runs on the first event-loop iteration, after the window has been mapped and painted.
-        slint::Timer::single_shot(Duration::ZERO, move || signal(&name));
+        // Prefer "after the first rendered frame"; fall back to the first event-loop
+        // iteration if the renderer does not support rendering notifiers.
+        let once = Rc::new(std::cell::Cell::new(Some(name)));
+        let fired = once.clone();
+        let notifier = holder.borrow().as_ref().map(|w| {
+            w.window().set_rendering_notifier(move |state, _| {
+                if matches!(state, slint::RenderingState::AfterRendering)
+                    && let Some(n) = fired.take()
+                {
+                    signal(&n);
+                }
+            })
+        });
+        if !matches!(notifier, Some(Ok(()))) {
+            eprintln!("ready marker: rendering notifier unavailable, using first event-loop turn");
+            slint::Timer::single_shot(Duration::ZERO, move || {
+                if let Some(n) = once.take() {
+                    signal(&n);
+                }
+            });
+        }
     }
     slint::run_event_loop_until_quit().expect("event loop");
+}
+
+/// 32x32 RGBA tray icon generated in code (no image decoder, no asset file).
+fn tray_icon() -> slint::Image {
+    const N: u32 = 32;
+    let mut buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(N, N);
+    for (i, px) in buf.make_mut_slice().iter_mut().enumerate() {
+        let (x, y) = ((i as u32 % N) as i32 - 16, (i as u32 / N) as i32 - 16);
+        let inside = x * x + y * y <= 15 * 15;
+        *px = if inside {
+            slint::Rgba8Pixel {
+                r: 0x1f,
+                g: 0x7a,
+                b: 0xd6,
+                a: 0xff,
+            }
+        } else {
+            slint::Rgba8Pixel {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            }
+        };
+    }
+    slint::Image::from_rgba8(buf)
 }
 
 thread_local! {
