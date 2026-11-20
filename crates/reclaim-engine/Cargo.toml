@@ -1,0 +1,18 @@
+[package]
+name = "reclaim-engine"
+description = "Engine thread, run state machine, scheduling and persistence for Reclaim"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+reclaim-core.workspace = true
+
+[dev-dependencies]
+reclaim-platform-fake.workspace = true

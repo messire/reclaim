@@ -1,6 +1,6 @@
 # Reclaim — OS Capability and Risk Analysis
 
-**Status:** desk analysis from Microsoft documentation and known Windows memory-manager behaviour. Items marked **[verify]** must be confirmed by the M0 API spike on Windows 10 22H2 and Windows 11 before the adapter depends on them.
+**Status:** desk analysis from Microsoft documentation and known Windows memory-manager behaviour. Items marked **[verify]** must be confirmed by the M0 API spike on Windows 10 22H2 and Windows 11 before the adapter depends on them. CI results of the spike are in [`docs/spikes/windows-api.md`](../spikes/windows-api.md); the standard-user run on the reference laptop is pending.
 
 ## 1. What working-set trimming actually does on Windows
 
@@ -21,13 +21,13 @@
 |---|---|---|---|---|---|
 | System RAM / commit | `GlobalMemoryStatusEx`, `GetPerformanceInfo` | none | — | — | µs cost; safe at startup |
 | Memory pressure signal | `CreateMemoryResourceNotification`, `QueryMemoryResourceNotification` | none | — | Coarse (low/high thresholds chosen by OS); level-triggered, stays signaled while the condition holds | Wait-able handle; the engine swaps low/high handles to avoid re-waking (ARCH §6.1) |
-| Standby / modified breakdown | PDH counters under `\Memory\` | none **[verify]** | — | Counter names are localized; use `PdhAddEnglishCounterW`. PDH loads extra DLLs (~MBs) | Load lazily, unload when hidden |
+| Standby / modified breakdown | PDH counters under `\Memory\` | none (verified) | — | Counter names are localized; use `PdhAddEnglishCounterW`. Query init ≈ 250 ms, +5–6 MiB; ≈ 2 MiB stays after unload (spike A7) | On demand only, loaded with `LoadLibraryExW` |
 | Paging input rate | PDH `\Memory\Pages Input/sec` | none | — | System-wide only | Cost indicator during follow-up |
 | Process list | `CreateToolhelp32Snapshot` | none | all processes (names, PIDs) | — | Documented; returns image name only |
-| Process memory | `GetProcessMemoryInfo` | `PROCESS_QUERY_LIMITED_INFORMATION` | own-user processes, many others | Some protected/system processes deny even limited query | `PROCESS_MEMORY_COUNTERS_EX2` (private WS) only on newer Windows 10/11 builds **[verify build]** |
+| Process memory | `GetProcessMemoryInfo` | `PROCESS_QUERY_LIMITED_INFORMATION` | own-user processes, many others | Some protected/system processes deny even limited query | `PROCESS_MEMORY_COUNTERS_EX2` (private WS) verified on builds 20348 and 26100 (spike A2); Windows 10 22H2 still **[verify]** |
 | Process start time | `GetProcessTimes` | `PROCESS_QUERY_LIMITED_INFORMATION` | as above | — | Used for identity |
-| Critical flag | `IsProcessCritical` | `PROCESS_QUERY_LIMITED_INFORMATION` | as above | Windows 8.1+ | Treat failure as "unknown → protected" |
-| Per-process I/O | `GetProcessIoCounters` | `PROCESS_QUERY_INFORMATION` or limited **[verify]** | own-user | — | Optional cost indicator |
+| Critical flag | `IsProcessCritical` | `PROCESS_QUERY_LIMITED_INFORMATION` | as above | Windows 8.1+; does **not** flag lsass or winlogon (spike A4) | Additive only; the built-in list is authoritative. Treat failure as "unknown → protected" |
+| Per-process I/O | `GetProcessIoCounters` | `PROCESS_QUERY_LIMITED_INFORMATION` (verified, spike A3) | own-user | — | Optional cost indicator |
 | Foreground process | `GetForegroundWindow` + `GetWindowThreadProcessId` | none | — | Null during secure desktop / lock screen | Exclude by default |
 | Trim working set | `SetProcessWorkingSetSize` / `EmptyWorkingSet` | `PROCESS_SET_QUOTA` + query (+ `SYNCHRONIZE` for exit detection) | own-user, same or lower integrity | Elevated (high-IL) processes from a medium-IL caller; other users; services; protected processes (PP/PPL) → `ERROR_ACCESS_DENIED` | Exactly the least-privilege boundary we want |
 | Integrity level | `OpenProcessToken` + `GetTokenInformation(TokenIntegrityLevel)` | `PROCESS_QUERY_LIMITED_INFORMATION` + `TOKEN_QUERY` | own-user | Fails for many system processes | Used only to *predict* "requires elevation"; the open attempt is authoritative |

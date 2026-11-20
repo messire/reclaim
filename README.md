@@ -22,7 +22,7 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 
 ## Development status
 
-**Planning.** An architecture is proposed: Rust, a single unelevated process, documented Win32 APIs only, and a UI toolkit (Slint or native Win32) to be chosen by a measured spike. See [Product requirements](docs/PRODUCT.md), [Acceptance criteria](docs/ACCEPTANCE.md), [References](docs/REFERENCES.md), and the architecture set:
+**M0 (foundations and spikes).** Rust, a single unelevated process, documented Win32 APIs only. Spike results: [Windows API](docs/spikes/windows-api.md), [UI toolkit](docs/spikes/ui-toolkit.md) (Slint chosen). See [Product requirements](docs/PRODUCT.md), [Acceptance criteria](docs/ACCEPTANCE.md), [References](docs/REFERENCES.md), and the architecture set:
 
 - [Gap analysis](docs/architecture/ANALYSIS.md)
 - [Architecture](docs/architecture/ARCHITECTURE.md) and its [critical review](docs/architecture/REVIEW.md)
@@ -30,6 +30,18 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 - [Benchmark methodology](docs/architecture/BENCHMARKS.md)
 - [Architecture decision records](docs/adr/)
 - [Implementation plan](docs/PLAN.md)
+
+## Building
+
+Requires the Rust toolchain pinned in `rust-toolchain.toml` (installed automatically by `rustup`).
+
+```sh
+cargo test --workspace                 # platform-independent crates, any OS
+cargo build --release -p reclaim-app   # Windows: reclaim.exe
+cargo run --release -p reclaim-bench --bin api-spike -- --out api-spike.md   # Windows: M0 API spike report
+```
+
+Workspace layout follows [ARCHITECTURE §3](docs/architecture/ARCHITECTURE.md#3-logical-architecture). As of milestone M0 the crates are skeletons.
 
 ## Initial engineering task
 

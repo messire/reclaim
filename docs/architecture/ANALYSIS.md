@@ -67,7 +67,7 @@ There is no code, build system, CI, license, issue tracker content or UX materia
 | Cross-platform core vs Windows-first | Abstractions modelled on Windows APIs will not fit Linux/macOS | Capability-based ports (`ARCHITECTURE.md §6`), optional metric fields |
 | Elevation only "for a specific justified capability" | Users will want to trim elevated processes too | MVP never elevates; elevated processes are reported as "requires administrator". A narrow broker is designed but deferred (ADR-0002) |
 | Comparison with Wise Memory Optimizer | Proprietary behaviour; it likely purges standby lists, which Reclaim excludes | Comparison is optional and observational; Reclaim does not chase its numbers |
-| Small binary vs localization/accessibility | Toolkits with good accessibility are bigger | Accessibility is a hard requirement; size target is "prefer" and yields |
+| Small binary vs localization/accessibility | Toolkits with good accessibility are bigger | Originally: accessibility hard, size yields. 2026-11-20: owner removed screen-reader accessibility from the requirements |
 
 ## 4. Risks identified at analysis time
 

@@ -1,0 +1,27 @@
+[package]
+name = "reclaim-app"
+description = "Reclaim desktop application"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# `unsafe` is allowed here (FFI), but every block needs a `// SAFETY:` comment.
+[lints.rust]
+unsafe_code = "allow"
+missing_debug_implementations = "warn"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+
+[[bin]]
+name = "reclaim"
+path = "src/main.rs"
+
+[dependencies]
+reclaim-core.workspace = true
+reclaim-engine.workspace = true

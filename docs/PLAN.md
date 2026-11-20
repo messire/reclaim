@@ -13,7 +13,7 @@
 | M3 | Engine and CLI | Threaded engine, run state machine, follow-up, persistence; `reclaim-cli` usable end-to-end | M1, M2 | L |
 | M4 | Desktop UI and tray | All MVP screens, tray lifecycle, single instance | M3, toolkit from M0 | L |
 | M5 | Benchmarks and effectiveness | Harness, probes, scenario runs, first published results | M3 (M4 for UI metrics) | M |
-| M6 | Hardening and release | Accessibility pass, soak, manual checklist, reproducible release | M4, M5 | M |
+| M6 | Hardening and release | Soak, manual checklist, reproducible release | M4, M5 | M |
 
 M2 and the M5 probe tooling can proceed in parallel once M1's ports exist. M4 can start on ViewModels against the fake engine during M3.
 
@@ -26,7 +26,7 @@ Tasks:
 2. Cargo workspace with empty crates per ARCHITECTURE §3; `rust-toolchain.toml`; rustfmt/clippy config; `#![forbid(unsafe_code)]` in core/engine.
 3. CI: Windows + Linux jobs (fmt, clippy `-D warnings`, test), `cargo deny` (licenses, advisories, ban networking crates), binary-size report artifact.
 4. **API spike** (throwaway, in `reclaim-bench`): verify every **[verify]** item in OS-CAPABILITIES §2 on Windows 10 22H2 and 11; measure `SetProcessWorkingSetSize` duration vs WS size; check PDH init cost; record access results for elevated/other-user/protected targets.
-5. **UI toolkit spike:** identical minimal UI in Slint (software renderer) and native Win32; measure ADR-0001 gates per BENCHMARKS B1–B3, B6; Narrator/NVDA check.
+5. ~~**UI toolkit spike:** identical minimal UI in Slint (software renderer) and native Win32; measure ADR-0001 gates per BENCHMARKS B1–B3, B6~~ Done: CI and reference laptop, see `docs/spikes/ui-toolkit.md`. Narrator/NVDA check dropped (accessibility removed from requirements, 2026-11-20).
 6. Update ADR-0001 to Accepted with measurements; update OS-CAPABILITIES with verified facts.
 
 Exit criteria: CI green on empty workspace; ADR-0001 accepted; spike report committed in `docs/spikes/`.
@@ -82,10 +82,10 @@ DoD coverage: ACC §1 (before/after/follow-up, cancel), §4 (no leaks, local log
 3. Startup sequence with "usable UI" marker; `--tray` mode.
 4. Tray icon, hover tooltip, menu, `TaskbarCreated` handling; Close vs Quit semantics; single instance and activation.
 5. Destroy window on hide (if supported) and verify B3.
-6. Keyboard navigation, focus order, high contrast, Per-Monitor V2 DPI.
+6. Per-Monitor V2 DPI.
 
-Exit: all MVP screens usable by keyboard and screen reader; B1–B3 within targets or deviations documented.
-DoD coverage: ACC §1 (responsive UI), §2, §4 (tray lifecycle), PROD §7 (accessibility, localization-ready).
+Exit: all MVP screens implemented; B1–B3 within targets or deviations documented.
+DoD coverage: ACC §1 (responsive UI), §2, §4 (tray lifecycle), PROD §7 (localization-ready).
 
 ### M5 — Benchmarks and effectiveness (`reclaim-bench`)
 
@@ -100,12 +100,11 @@ DoD coverage: ACC §2, §3.
 
 ### M6 — Hardening and release
 
-1. Accessibility review (Narrator, NVDA, keyboard-only, high contrast).
-2. Manual test checklist `docs/testing/MANUAL_CHECKLIST.md` executed on VM-CLEAN (Win10, Win11) as standard user.
-3. Final soak B8; clean-VM launch without runtimes.
-4. Release workflow: tagged build in CI, zip + `SHA256SUMS`, third-party notices generated, reproducibility check documented.
-5. README update: what Reclaim does and does not do, with links to benchmark summaries; privacy statement.
-6. Optional: code signing (owner decision).
+1. Manual test checklist `docs/testing/MANUAL_CHECKLIST.md` executed on VM-CLEAN (Win10, Win11) as standard user.
+2. Final soak B8; clean-VM launch without runtimes.
+3. Release workflow: tagged build in CI, zip + `SHA256SUMS`, third-party notices generated, reproducibility check documented.
+4. README update: what Reclaim does and does not do, with links to benchmark summaries; privacy statement.
+5. Optional: code signing (owner decision).
 
 Exit: MVP release candidate tagged; all ACCEPTANCE §1, §2 (or documented deviations), §3, §4 items checked with evidence links.
 
@@ -130,10 +129,10 @@ Exit: MVP release candidate tagged; all ACCEPTANCE §1, §2 (or documented devia
 
 | # | Question | Why it matters | Proposed default |
 |---|---|---|---|
-| Q1 | Project license? | Determines whether Slint can be used under GPLv3 or needs the royalty-free/commercial license; release notices | **Decided 2026-11-20:** free distribution → MIT. If Slint wins, it is used under its royalty-free license with the required attribution (About screen) **[verify current terms in M0]** |
+| Q1 | Project license? | Determines whether Slint can be used under GPLv3 or needs the royalty-free/commercial license; release notices | **Decided 2026-11-20:** free distribution → MIT. If Slint wins, it is used under its royalty-free license (Royalty-free 2.0, verified in M0) with the required attribution (About screen) |
 | Q2 | Minimum supported Windows version? | API availability, test matrix | **Decided 2026-11-20:** Windows 10 22H2 and Windows 11 23H2+ |
 | Q3 | Which machines are the reference hardware? | Performance targets are unverifiable without them | **Decided 2026-11-20:** the owner's laptop (`RH-OWNER`, see `docs/benchmarks/reference-hardware.md`) plus VirtualBox VMs on it for low-RAM and clean-install cases |
-| Q4 | Preference if both toolkits pass the gates? | Portability vs smallest footprint | Slint (one UI for all platforms) |
+| Q4 | Preference if both toolkits pass the gates? | Portability vs smallest footprint | **Decided 2026-11-20:** Slint (one UI for all platforms); accessibility removed from requirements |
 | Q5 | Close (X) behaviour by default? | Tray UX | **Decided 2026-11-20:** Close minimizes to tray (ARCHITECTURE §8.2) |
 | Q6 | Is an elevated broker wanted later? | Scope of post-MVP work and threat review | Not planned until users ask |
 | Q7 | Distribution: portable zip only, or installer? Code signing? | Release workflow, SmartScreen | Portable zip for MVP; signing decided before public release |
