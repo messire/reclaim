@@ -246,7 +246,7 @@ trait Clock           { fn now(&self) -> Instant; }
   - when it signals: publish `Pressure::Low`, remove the low handle from the wait set, wait on the high-memory handle instead, and arm one coalesced re-check timer (30 s) that calls `QueryMemoryResourceNotification` to detect a return to the middle band, where neither handle is signaled;
   - when the high handle signals or the re-check finds low no longer signaled: publish the new state and go back to waiting on the low handle.
   The engine therefore wakes at most once per state change, plus once every 30 s while memory stays low.
-- PDH: opened lazily only while the window is visible or a run follow-up is active; closed when hidden.
+- PDH: `pdh.dll` is loaded at run time (`LoadLibraryExW` restricted to System32, not imported), opened only while the window is visible or a run follow-up is active, and closed and unloaded (`FreeLibrary`) when hidden, so its memory is actually released.
 - All handles are wrapped in an RAII type; no raw `HANDLE` escapes the crate.
 
 ## 7. Run state machine

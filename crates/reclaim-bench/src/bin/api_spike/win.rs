@@ -5,7 +5,8 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, FILETIME, GetLastError, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    CloseHandle, FILETIME, FreeLibrary, GetLastError, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0,
+    WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Security::{
     GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
@@ -13,13 +14,15 @@ use windows_sys::Win32::Security::{
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
 };
+use windows_sys::Win32::System::LibraryLoader::{
+    GetModuleHandleW, GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
+};
 use windows_sys::Win32::System::Memory::{
     CreateMemoryResourceNotification, HighMemoryResourceNotification,
     LowMemoryResourceNotification, QueryMemoryResourceNotification,
 };
 use windows_sys::Win32::System::Performance::{
-    PDH_FMT_COUNTERVALUE, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY, PdhAddEnglishCounterW,
-    PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterValue, PdhOpenQueryW,
+    PDH_FMT_COUNTERVALUE, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY,
 };
 use windows_sys::Win32::System::ProcessStatus::{
     GetPerformanceInfo, GetProcessMemoryInfo, PERFORMANCE_INFORMATION, PROCESS_MEMORY_COUNTERS,
@@ -627,11 +630,52 @@ fn section_pdh(r: &mut String) {
         r"\Memory\Page Reads/sec",
     ];
     let _ = writeln!(r, "## PDH counters\n");
+    let dll = wide("pdh.dll");
+    // SAFETY: NUL-terminated module name.
+    let preloaded = !unsafe { GetModuleHandleW(dll.as_ptr()) }.is_null();
     let before = own_private_bytes();
+    let t_load = Instant::now();
+    // pdh.dll is loaded at run time (not imported) so its load and unload cost can be measured,
+    // and so the product's lazy PDH reader can actually release it (review of PR #2).
+    // SAFETY: NUL-terminated module name; search restricted to System32.
+    let module = unsafe {
+        LoadLibraryExW(
+            dll.as_ptr(),
+            std::ptr::null_mut(),
+            LOAD_LIBRARY_SEARCH_SYSTEM32,
+        )
+    };
+    if module.is_null() {
+        let _ = writeln!(r, "LoadLibraryExW(pdh.dll) failed: {}\n", last_error());
+        return;
+    }
+    let load_time = t_load.elapsed();
+    let after_load = own_private_bytes();
+    let sym = |name: &[u8]| {
+        // SAFETY: module is a loaded library; name is NUL-terminated ASCII.
+        unsafe { GetProcAddress(module, name.as_ptr()) }.expect("PDH export missing")
+    };
+    type RawProc = unsafe extern "system" fn() -> isize;
+    type OpenQuery = unsafe extern "system" fn(*const u16, usize, *mut PDH_HQUERY) -> u32;
+    type AddCounter =
+        unsafe extern "system" fn(PDH_HQUERY, *const u16, usize, *mut PDH_HCOUNTER) -> u32;
+    type Collect = unsafe extern "system" fn(PDH_HQUERY) -> u32;
+    type GetValue =
+        unsafe extern "system" fn(PDH_HCOUNTER, u32, *mut u32, *mut PDH_FMT_COUNTERVALUE) -> u32;
+    // SAFETY: each target type matches the documented signature of that PDH export (pdh.h).
+    let (pdh_open, pdh_add, pdh_collect, pdh_get, pdh_close) = unsafe {
+        (
+            std::mem::transmute::<RawProc, OpenQuery>(sym(b"PdhOpenQueryW\0")),
+            std::mem::transmute::<RawProc, AddCounter>(sym(b"PdhAddEnglishCounterW\0")),
+            std::mem::transmute::<RawProc, Collect>(sym(b"PdhCollectQueryData\0")),
+            std::mem::transmute::<RawProc, GetValue>(sym(b"PdhGetFormattedCounterValue\0")),
+            std::mem::transmute::<RawProc, Collect>(sym(b"PdhCloseQuery\0")),
+        )
+    };
     let t0 = Instant::now();
     let mut q: PDH_HQUERY = std::ptr::null_mut();
     // SAFETY: `q` is a live slot; null data source means real-time.
-    let rc = unsafe { PdhOpenQueryW(std::ptr::null(), 0, &mut q) };
+    let rc = unsafe { pdh_open(std::ptr::null(), 0, &mut q) };
     if rc != 0 {
         let _ = writeln!(r, "PdhOpenQueryW failed: 0x{rc:08x}\n");
         return;
@@ -641,16 +685,16 @@ fn section_pdh(r: &mut String) {
         let path = wide(c);
         let mut h: PDH_HCOUNTER = std::ptr::null_mut();
         // SAFETY: q is open; path is NUL-terminated; `h` is a live slot.
-        let rc = unsafe { PdhAddEnglishCounterW(q, path.as_ptr(), 0, &mut h) };
+        let rc = unsafe { pdh_add(q, path.as_ptr(), 0, &mut h) };
         handles.push((c, if rc == 0 { Ok(h) } else { Err(rc) }));
     }
     // SAFETY: q is open.
-    unsafe { PdhCollectQueryData(q) };
+    unsafe { pdh_collect(q) };
     let init = t0.elapsed();
     let loaded = own_private_bytes();
     std::thread::sleep(Duration::from_secs(1));
     // SAFETY: q is open.
-    unsafe { PdhCollectQueryData(q) };
+    unsafe { pdh_collect(q) };
 
     let _ = writeln!(r, "| Counter | Value |\n|---|---|");
     for (name, h) in &handles {
@@ -661,8 +705,7 @@ fn section_pdh(r: &mut String) {
                 // SAFETY: zeroed is a valid bit pattern for this C struct/union.
                 let mut v: PDH_FMT_COUNTERVALUE = unsafe { std::mem::zeroed() };
                 // SAFETY: counter handle belongs to the open query; out pointers are live.
-                let rc =
-                    unsafe { PdhGetFormattedCounterValue(*h, PDH_FMT_DOUBLE, &mut ty, &mut v) };
+                let rc = unsafe { pdh_get(*h, PDH_FMT_DOUBLE, &mut ty, &mut v) };
                 if rc == 0 {
                     // SAFETY: PDH_FMT_DOUBLE was requested, so the double member is the active one.
                     let d = unsafe { v.Anonymous.doubleValue };
@@ -679,11 +722,21 @@ fn section_pdh(r: &mut String) {
         let _ = writeln!(r, "| `{name}` | {v} |");
     }
     // SAFETY: q is open and not used afterwards.
-    unsafe { PdhCloseQuery(q) };
+    unsafe { pdh_close(q) };
     let after_close = own_private_bytes();
+    // SAFETY: module was loaded above and no PDH function pointer is used after this point.
+    let freed = unsafe { FreeLibrary(module) } != 0;
+    // SAFETY: NUL-terminated module name.
+    let still_loaded = !unsafe { GetModuleHandleW(dll.as_ptr()) }.is_null();
+    let after_unload = own_private_bytes();
     let _ = writeln!(
         r,
-        "\nInit (open + add + first collect): {init:?}. Spike private bytes: {before:.1} MiB before, {loaded:.1} MiB with PDH loaded, {after_close:.1} MiB after close.\n"
+        "\n| Step | Time | Spike private bytes |\n|---|---|---|\n\
+         | Before (pdh.dll already loaded: {preloaded}) | | {before:.1} MiB |\n\
+         | LoadLibraryExW(pdh.dll) | {load_time:?} | {after_load:.1} MiB |\n\
+         | Open query + add counters + first collect | {init:?} | {loaded:.1} MiB |\n\
+         | After PdhCloseQuery | | {after_close:.1} MiB |\n\
+         | After FreeLibrary (ok: {freed}, still loaded: {still_loaded}) | | {after_unload:.1} MiB |\n"
     );
 }
 
