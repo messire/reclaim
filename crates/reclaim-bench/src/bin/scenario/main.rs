@@ -30,7 +30,7 @@ mod win {
     use std::path::PathBuf;
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-    use reclaim_bench::run::{Arm, FastClock, arm, run_arm};
+    use reclaim_bench::run::{Arm, FastClock, arm, run_arm_timed};
     use reclaim_bench::spawn::Probe;
     use reclaim_bench::summary::{faults, scenario_md};
     use reclaim_core::model::ProcessKey;
@@ -63,13 +63,9 @@ mod win {
         }
     }
 
-    /// Long-lived probes of a scenario's workload.
-    fn workload(
-        scenario: &str,
-        size: u64,
-        allow_pressure: bool,
-    ) -> Result<(Vec<Probe>, Probe), String> {
-        let latency = Probe::start(&["latency", "--size", "256", "--interval-ms", "100"])?;
+    /// A scenario's workload probes, created afresh for every arm so that no arm inherits
+    /// the working sets an earlier trim arm reduced (or the pressure it relieved).
+    fn workload(scenario: &str, size: u64, allow_pressure: bool) -> Result<Vec<Probe>, String> {
         let mut probes = Vec::new();
         match scenario {
             "S3" => probes.push(Probe::start(&[
@@ -93,7 +89,7 @@ mod win {
             }
             _ => {}
         }
-        Ok((probes, latency))
+        Ok(probes)
     }
 
     /// S7: probes that exit 10–500 ms from now, while the arm plans and trims.
@@ -155,8 +151,17 @@ mod win {
             modes.swap(i, (rng.next() % (i as u64 + 1)) as usize);
         }
 
-        let (workload, latency) = match workload(&scenario, size, flag(&args, "--allow-pressure")) {
-            Ok(w) => w,
+        let allow_pressure = flag(&args, "--allow-pressure");
+        if scenario == "S5" && !allow_pressure {
+            eprintln!(
+                "reclaim-scenario: S5 drives the machine into high memory pressure; pass --allow-pressure to confirm"
+            );
+            return 1;
+        }
+        // The latency probe re-touches its memory every 100 ms, so it recovers by itself
+        // between arms and can keep one baseline across them.
+        let latency = match Probe::start(&["latency", "--size", "256", "--interval-ms", "100"]) {
+            Ok(p) => p,
             Err(e) => {
                 eprintln!("reclaim-scenario: {e}");
                 return 1;
@@ -172,6 +177,13 @@ mod win {
         }
 
         for (i, &mode) in modes.iter().enumerate() {
+            let workload = match workload(&scenario, size, allow_pressure) {
+                Ok(w) => w,
+                Err(e) => {
+                    eprintln!("reclaim-scenario: {e}");
+                    return 1;
+                }
+            };
             if i > 0 || !quick {
                 eprintln!("settling for {} s…", settle.as_secs());
                 std::thread::sleep(settle);
@@ -208,7 +220,7 @@ mod win {
             let mut c = Coordinator::new(platform, clock, policy.clone());
             let start = Instant::now();
             eprintln!("arm {} ({mode:?})…", i + 1);
-            let record = match run_arm(&mut c, mode, &selection, true, |d| {
+            let (record, completed) = match run_arm_timed(&mut c, mode, &selection, true, |d| {
                 std::thread::sleep(d / factor as u32)
             }) {
                 Ok(r) => r,
@@ -217,7 +229,6 @@ mod win {
                     return 1;
                 }
             };
-            let completed = start + Duration::from_millis(record.elapsed.0);
             if quick {
                 // Leave the post-trim latency window time to fill.
                 std::thread::sleep(
@@ -243,9 +254,9 @@ mod win {
                 eprintln!("reclaim-scenario: cannot write {}: {e}", file.display());
             }
             drop(race);
+            drop(workload);
             arms.push(arm(mode, record, before, after));
         }
-        drop(workload);
         drop(latency);
 
         let commit = std::env::var("GITHUB_SHA").unwrap_or_else(|_| "local build".into());

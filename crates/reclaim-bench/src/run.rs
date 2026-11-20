@@ -1,6 +1,6 @@
 //! Drives the engine's run coordinator for benchmark arms and the soak (B5, B8, §6).
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use reclaim_core::analysis::{RunAnalysis, analyse};
 use reclaim_core::outcome::{RunMode, RunRecord};
@@ -51,8 +51,20 @@ pub fn run_arm<P: Platform>(
     mode: RunMode,
     selection: &Selection,
     follow_up: bool,
-    mut wait: impl FnMut(Duration),
+    wait: impl FnMut(Duration),
 ) -> Result<RunRecord, String> {
+    run_arm_timed(c, mode, selection, follow_up, wait).map(|(r, _)| r)
+}
+
+/// As [`run_arm`], also returning the real instant trimming completed (the coordinator's
+/// clock may be accelerated, so its elapsed time cannot anchor real-time windows).
+pub fn run_arm_timed<P: Platform>(
+    c: &mut Coordinator<P>,
+    mode: RunMode,
+    selection: &Selection,
+    follow_up: bool,
+    mut wait: impl FnMut(Duration),
+) -> Result<(RunRecord, Instant), String> {
     let plan = c.plan(selection).map_err(|e| e.to_string())?;
     if plan.targets.is_empty() {
         c.discard();
@@ -66,13 +78,14 @@ pub fn run_arm<P: Platform>(
             Step::Idle => return Err("run did not start".into()),
         }
     }
+    let completed = Instant::now();
     if !follow_up {
-        return Ok(c.finalize(true));
+        return Ok((c.finalize(true), completed));
     }
     loop {
         let (_, done) = c.tick();
         if let Some(r) = done {
-            return Ok(r);
+            return Ok((r, completed));
         }
         let ms = c.next_follow_up().map_or(0, |d| d.since(c.now()).0);
         wait(Duration::from_millis(ms.max(1)));
