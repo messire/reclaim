@@ -73,7 +73,7 @@ Inspired by Roomy, but not intended as a one-to-one clone:
 - No mandatory network, account, telemetry, ads or background update service.
 - Reliable operation under access errors, process exits, permission boundaries and high system load.
 - Least privilege, explicit error handling, deterministic cleanup and testability.
-- Accessible, localized-ready UI. Avoid animation or periodic polling that increases idle load.
+- Localization-ready UI. Avoid animation or periodic polling that increases idle load.
 - Preserve future cross-platform options without forcing lowest-common-denominator behavior.
 
 ## 8. Technology decision
