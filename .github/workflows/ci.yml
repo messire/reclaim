@@ -65,6 +65,13 @@ jobs:
         run: cargo test --workspace --locked
       - name: Release build
         run: cargo build --release --locked -p reclaim-app -p reclaim-cli
+      - name: CLI smoke test (read-only and dry run)
+        shell: pwsh
+        run: |
+          ./target/release/reclaim-cli.exe status
+          ./target/release/reclaim-cli.exe list --eligible
+          ./target/release/reclaim-cli.exe trim --dry-run --no-follow-up --json | Out-File cli-dry-run.json
+          if ((Get-Item cli-dry-run.json).Length -lt 100) { throw "dry run produced no record" }
       - name: Binary size report
         shell: pwsh
         run: |
@@ -85,7 +92,10 @@ jobs:
           $deps
           if ($deps -match 'VCRUNTIME|MSVCP|api-ms-win-crt') { throw "reclaim.exe depends on the VC++ runtime" }
 
+  # The M0 spikes are evidence for decisions already taken; they run only on demand
+  # (Actions → CI → Run workflow) to keep pull-request CI short.
   api-spike:
+    if: github.event_name == 'workflow_dispatch'
     name: Windows API spike (M0)
     runs-on: ${{ matrix.os }}
     strategy:
@@ -114,6 +124,7 @@ jobs:
           path: target/release/api-spike.exe
 
   ui-spike:
+    if: github.event_name == 'workflow_dispatch'
     name: UI toolkit spike (M0)
     runs-on: windows-2025
     steps:
