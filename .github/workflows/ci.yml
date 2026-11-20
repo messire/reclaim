@@ -119,12 +119,13 @@ jobs:
         if: always()
         shell: pwsh
         run: Get-Content ui-*.md -ErrorAction SilentlyContinue | Out-File -Append $env:GITHUB_STEP_SUMMARY
+      - name: Collect artifact files
+        if: always()
+        run: |
+          New-Item -ItemType Directory -Force ui-spike | Out-Null
+          Copy-Item ui-*.md, target/release/spike-ui-win32.exe, target/release/spike-ui-slint.exe, target/release/ui-bench.exe ui-spike -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ui-spike
-          path: |
-            ui-*.md
-            target/release/spike-ui-win32.exe
-            target/release/spike-ui-slint.exe
-            target/release/ui-bench.exe
+          path: ui-spike/

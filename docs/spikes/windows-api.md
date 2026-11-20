@@ -1,6 +1,6 @@
 # M0 spike: Windows API behaviour
 
-**Status:** CI results recorded 2026-11-20. **Pending:** a run on the reference laptop (`RH-OWNER`) as a standard, unelevated user; the access results below come from elevated CI runners and are **not** what Reclaim will see.
+**Status:** CI and reference-laptop results recorded 2026-11-20. The owner works as administrator, so the laptop run was elevated too; the **standard-user access matrix is still pending** and moves to a VirtualBox VM (`VM-CLEAN`).
 **Tool:** `cargo run --release -p reclaim-bench --bin api-spike -- --out report.md`
 **Raw reports:** [CI windows-2022](raw/ci-windows-2022.md) (Server 2022, build 20348) · [CI windows-2025](raw/ci-windows-2025.md) (Server 2025, build 26100, the Windows 11 24H2 code base)
 
@@ -22,6 +22,16 @@
 | A12 | Does the `SYNCHRONIZE` exit check work? | Yes: `WAIT_TIMEOUT` while alive, `WAIT_OBJECT_0` after exit. | Confirms REVIEW F28. |
 | A13 | What happens when trimming an exited process through a held handle? | `SetProcessWorkingSetSize` fails with **`ERROR_ACCESS_DENIED` (5)**, not a dedicated "exited" error. `GetProcessMemoryInfo` still succeeds (WS 0). | Classification must check exit **before** mapping error 5: wait(0) signaled → `Failed(Exited)`, otherwise → `Failed(AccessDenied)`. Otherwise an exit race would be misreported as a permission problem. |
 | A14 | Which processes deny the trim open on an elevated CI runner? | System, Registry, smss, csrss, wininit, services, MsMpEng (protected), plus ~5 others. lsass, winlogon, dwm, explorer **were** openable when elevated. | Elevated contexts can reach critical processes, so policy, not access control, must protect them (another reason for A4's list). The standard-user picture is pending the laptop run. |
+
+### Reference laptop (RH-OWNER, Windows 11 Home 26H2 build 26300, elevated, under real memory pressure)
+
+[Raw report](raw/rh-owner-api.md). Confirms the CI findings on a client SKU:
+- A1: the High notification was signaled on both waits at 86 % load (level-triggered, and a real pressure case).
+- A2/A3: EX2 and I/O counters succeeded for all 400 openable processes.
+- A4: `IsProcessCritical` again misses `lsass.exe` and `winlogon.exe`; elevated, `winlogon.exe`, `dwm.exe`, `audiodg.exe` and a critical `svchost.exe` were openable for trim, so the policy lists are the only protection in an elevated session.
+- A5: 401 processes enumerated in 10.5 ms median.
+- A7: PDH query setup 285 ms; ≈ 1.8 MiB stays after unload.
+- A9–A13: trim 26 ms / 256 MiB and 98 ms / 1 GiB; re-touch after trim 57 ms and 240 ms versus 0.7 ms and 2.9 ms resident; commit unchanged; exit and error-5 behaviour identical.
 
 ## 2. Design changes from this spike
 

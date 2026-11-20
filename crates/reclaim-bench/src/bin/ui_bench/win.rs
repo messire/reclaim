@@ -148,6 +148,15 @@ pub fn main() {
         );
         let mean = ready_private.iter().sum::<f64>() / ready_private.len() as f64;
         let _ = writeln!(r, "| Private bytes at ready | {mean:.1} MiB |");
+        let each: Vec<String> = starts
+            .iter()
+            .map(|d| format!("{:.0}", d.as_secs_f64() * 1000.0))
+            .collect();
+        let _ = writeln!(r, "| Each start, in order (ms) | {} |", each.join(", "));
+    }
+    if let Some((mut child, _)) = last.take_if(|_| idle_secs == 0) {
+        let _ = child.kill();
+        let _ = child.wait();
     }
     if let Some((mut child, hide)) = last {
         std::thread::sleep(Duration::from_secs(10));

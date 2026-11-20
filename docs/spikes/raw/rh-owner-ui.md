@@ -1,0 +1,29 @@
+# UI spike on the reference laptop (RH-OWNER), 2026-11-20
+
+Run by the owner from an elevated PowerShell with the CI artifact `ui-spike` (commit e1a0417):
+`ui-bench --exe <spike>.exe --runs 10 --idle-secs 300`. The machine was under memory pressure
+during the session (83–86 % load, commit ≈ 41.6 of 55 GiB, ≈ 430 pages input/s), with normal
+desktop use otherwise paused.
+
+## UI spike: Native Win32
+
+| Metric | Value |
+|---|---|
+| Executable size | 0.30 MiB |
+| Warm start to usable UI (N=10) | median 58.0071ms, p95 668.1682ms, min 53.5632ms |
+| Private bytes at ready | 2.3 MiB |
+| Idle, window visible (300 s) | CPU 0.130 % of one core; private bytes mean 2.3 MiB, max 2.4 MiB |
+| Idle, closed to tray (300 s) | CPU 0.000 % of one core; private bytes mean 2.3 MiB, max 2.4 MiB |
+
+## UI spike: Slint
+
+| Metric | Value |
+|---|---|
+| Executable size | 11.55 MiB |
+| Warm start to usable UI (N=10) | median 25.1042ms, p95 2.5789047s, min 23.6552ms |
+| Private bytes at ready | 2.8 MiB |
+| Idle, window visible (300 s) | CPU 0.125 % of one core; private bytes mean 5.5 MiB, max 5.7 MiB |
+| Idle, closed to tray (300 s) | CPU 0.000 % of one core; private bytes mean 3.7 MiB, max 3.8 MiB |
+
+With N = 10, "p95" is the slowest run. This version of `ui-bench` did not list individual runs, so
+it is not known whether the slow run was the first (cold) one.
