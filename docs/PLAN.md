@@ -32,7 +32,7 @@ Tasks:
 Exit criteria: CI green on empty workspace; ADR-0001 accepted; spike report committed in `docs/spikes/`.
 DoD coverage: ACC §6 (ADR, technology comparison with evidence).
 
-### M1 — Core domain (`reclaim-core`, `reclaim-platform-fake`)
+### M1 — Core domain (`reclaim-core`, `reclaim-platform-fake`) — done 2026-11-20 (line coverage 99.7 %)
 
 1. `Bytes` and formatting (IEC), metric ids and glossary text keys.
 2. `ProcessKey`, `ProcessInfo`, `MemorySnapshot`, `SystemSnapshot`, `Capabilities`.

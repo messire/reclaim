@@ -23,6 +23,10 @@ reclaim-engine = { path = "crates/reclaim-engine" }
 reclaim-platform-fake = { path = "crates/reclaim-platform-fake" }
 reclaim-platform-windows = { path = "crates/reclaim-platform-windows" }
 windows-sys = "0.61"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = { version = "0.9", default-features = false, features = ["parse", "serde", "display"] }
+proptest = { version = "1", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
