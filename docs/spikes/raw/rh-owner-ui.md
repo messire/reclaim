@@ -27,3 +27,14 @@ desktop use otherwise paused.
 
 With N = 10, "p95" is the slowest run. This version of `ui-bench` did not list individual runs, so
 it is not known whether the slow run was the first (cold) one.
+
+## Start-up only, 20 runs each (fresh download, unzipped into a new folder, run in this order)
+
+`ui-bench --runs 20 --idle-secs 0`, artifact from commit d5da9ea.
+
+| Spike | Median | p95 | Min | Each start, in order (ms) |
+|---|---|---|---|---|
+| Slint | 25.2 ms | 104.6 ms | 23.7 ms | 981, 25, 30, 25, 26, 24, 31, 25, 25, 24, 27, 25, 30, 25, 26, 26, 105, 24, 24, 24 |
+| Native Win32 | 72.1 ms | 157.9 ms | 58.3 ms | 10131, 59, 63, 63, 66, 77, 60, 75, 72, 58, 69, 69, 104, 68, 158, 84, 83, 89, 98, 72 |
+
+Private bytes at ready: Slint 2.7 MiB, Win32 2.4 MiB.
