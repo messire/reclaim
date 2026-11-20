@@ -1,0 +1,69 @@
+name: Release
+
+# Tagged build (PLAN M6.3): push a tag `vX.Y.Z` to produce a draft GitHub release with the
+# zip, SHA256SUMS and third-party notices. The draft is published by the owner by hand.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Reproducibility: no absolute build paths in the binaries.
+  RUSTFLAGS: "-C target-feature=+crt-static --remap-path-prefix=D:\\a\\reclaim\\reclaim=. --remap-path-prefix=C:\\Users\\runneradmin\\.cargo=~/.cargo"
+
+jobs:
+  release:
+    name: Build release (Windows x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests
+        run: cargo test --workspace --locked
+      - name: Build
+        run: cargo build --release --locked -p reclaim-app -p reclaim-cli
+      - name: Reproducibility check (second build in a clean target dir)
+        shell: pwsh
+        run: |
+          cargo build --release --locked -p reclaim-app -p reclaim-cli --target-dir target-repro
+          $lines = @("## Reproducibility", "", "| Binary | Build 1 | Build 2 | Identical |", "|---|---|---|---|")
+          foreach ($f in "reclaim.exe", "reclaim-cli.exe") {
+            $a = (Get-FileHash "target/release/$f" -Algorithm SHA256).Hash
+            $b = (Get-FileHash "target-repro/release/$f" -Algorithm SHA256).Hash
+            $lines += "| $f | $a | $b | $($a -eq $b) |"
+          }
+          $lines | Out-File -Append $env:GITHUB_STEP_SUMMARY
+      - name: Third-party notices
+        run: python scripts/third_party_notices.py --out THIRD_PARTY_NOTICES.txt
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).packages |
+            Where-Object { $_.name -eq "reclaim-app" } | Select-Object -ExpandProperty version
+          $name = "reclaim-$version-windows-x64"
+          New-Item -ItemType Directory -Force $name | Out-Null
+          Copy-Item target/release/reclaim.exe, target/release/reclaim-cli.exe, LICENSE, README.md, THIRD_PARTY_NOTICES.txt $name
+          Compress-Archive -Path "$name/*" -DestinationPath "$name.zip" -Force
+          $sums = foreach ($f in "$name.zip", "$name/reclaim.exe", "$name/reclaim-cli.exe") {
+            "{0}  {1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf)
+          }
+          $sums | Out-File -Encoding ascii SHA256SUMS
+          Get-Content SHA256SUMS
+          "ZIP=$name.zip" | Out-File -Append $env:GITHUB_ENV
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: |
+            ${{ env.ZIP }}
+            SHA256SUMS
+      - name: Draft GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            ${{ env.ZIP }}
+            SHA256SUMS
