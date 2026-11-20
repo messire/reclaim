@@ -120,6 +120,8 @@ pub enum Event {
     ProcessTable(Vec<Row>),
     /// A plan waiting for confirmation.
     PlanReady(Plan),
+    /// `StartRun` was refused (stale plan, failed first sample); no run is active.
+    RunRejected(String),
     /// One target processed.
     RunProgress {
         /// Done so far.
@@ -407,7 +409,7 @@ impl<'a, P: Platform> Engine<'a, P> {
             Command::StartRun { plan_id, mode } => match self.c.start(plan_id, mode) {
                 Ok(Some(previous)) => self.finished(previous),
                 Ok(None) => {}
-                Err(e) => self.warn(e.to_string()),
+                Err(e) => (self.sink)(Event::RunRejected(e.to_string())),
             },
             Command::CancelRun => {
                 if let Some(r) = self.c.cancel() {
@@ -548,7 +550,7 @@ mod tests {
         });
         wait_for(
             &log,
-            |e| matches!(e, Event::Warning(w) if w.contains("no longer current")),
+            |e| matches!(e, Event::RunRejected(w) if w.contains("no longer current")),
         );
         h.send(Command::SetDetails(true));
         h.send(Command::Subscribe(View::Hidden));

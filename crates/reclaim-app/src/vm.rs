@@ -488,6 +488,18 @@ impl AppState {
                     ..Dirty::default()
                 })
             }
+            Event::RunRejected(w) => {
+                if matches!(self.stage, Stage::Planning | Stage::Running { .. }) {
+                    self.stage = Stage::Idle;
+                }
+                self.warning = Some(w);
+                Reaction::dirty(Dirty {
+                    warning: true,
+                    overview: true,
+                    result: true,
+                    ..Dirty::default()
+                })
+            }
             Event::Warning(w) => {
                 if matches!(self.stage, Stage::Planning) {
                     // The plan request failed; let the user try again.
@@ -598,6 +610,11 @@ impl AppState {
             .iter()
             .find(|(p, _)| p.image.matches(image))
             .map(|(p, _)| p.key)
+    }
+
+    /// Whether only eligible processes are listed.
+    pub fn eligible_only(&self) -> bool {
+        self.eligible_only
     }
 
     /// Number of selected processes.

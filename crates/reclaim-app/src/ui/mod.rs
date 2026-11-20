@@ -120,6 +120,8 @@ impl App {
         if d.processes {
             let rows = s.processes();
             w.set_selected_count(s.selected_count() as i32);
+            // A recreated window starts unchecked: restore the filter it shows.
+            w.set_eligible_only(s.eligible_only());
             w.set_rows(table(rows.into_iter().map(|r| {
                 vec![
                     if r.selected { "✓" } else { "" }.to_owned(),
@@ -201,7 +203,12 @@ fn build() -> Option<MainWindow> {
     w.on_run(|dry| act(|s| s.request_run(mode(dry), false)));
     w.on_run_selected(|dry| act(|s| s.request_run(mode(dry), true)));
     w.on_toggle_details(|on| act(|s| s.set_details(on)));
-    w.on_sort(|c, asc| act_dirty(|s| s.sort_by(Column::from_index(c.max(0) as usize), asc)));
+    // Table column 0 is the selection mark; data columns start at 1.
+    w.on_sort(|c, asc| {
+        if c >= 1 {
+            act_dirty(|s| s.sort_by(Column::from_index(c as usize - 1), asc));
+        }
+    });
     w.on_set_eligible_only(|on| act_dirty(|s| s.set_eligible_only(on)));
     w.on_toggle_row(|i| {
         act_dirty(|s| match s.processes().get(i.max(0) as usize) {

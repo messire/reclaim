@@ -237,6 +237,16 @@ fn overview_and_tray_follow_samples() {
     assert_eq!(s.overview().last_run, "No run yet.");
     assert!(s.history().is_empty());
 
+    // A refused start returns the UI to a state where the user can try again.
+    s.request_run(RunMode::Trim, false);
+    assert!(!s.overview().can_run);
+    let r = s.apply(Event::RunRejected("stale plan".into()));
+    assert!(r.dirty.warning);
+    assert!(s.overview().can_run);
+    assert!(matches!(s.stage(), Stage::Idle));
+    s.dismiss_warning();
+    assert!(!s.eligible_only());
+
     let w = s.apply(Event::Warning("x".into()));
     assert!(w.dirty.warning);
     assert_eq!(s.warning(), Some("x"));

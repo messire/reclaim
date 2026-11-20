@@ -124,6 +124,10 @@ pub const TEMPLATES_EN: &[(&str, &str)] = &[
         "{trimmed} processes trimmed, {skipped} skipped, {failed} failed, {cancelled} not attempted.",
     ),
     (
+        "report.totals_dry",
+        "{measured} processes measured without trimming, {skipped} skipped, {failed} failed, {cancelled} not attempted.",
+    ),
+    (
         "report.ws_reduced",
         "Working set reduced by {amount} in total, measured right after each process was trimmed.",
     ),
@@ -146,6 +150,14 @@ pub const TEMPLATES_EN: &[(&str, &str)] = &[
     (
         "report.faults",
         "Trimmed processes took {faults} page faults to bring pages back into memory.",
+    ),
+    (
+        "report.faults_dry",
+        "Measured processes took {faults} page faults during the follow-up without any trimming (their normal activity).",
+    ),
+    (
+        "report.paging_peak",
+        "Pages read from disk peaked at {peak} per second during the follow-up; the rate before the run was not measured.",
     ),
     (
         "report.paging_cost",
@@ -204,12 +216,25 @@ pub fn report(a: &RunAnalysis, pressure_after: Pressure) -> Vec<Statement> {
     if a.mode == RunMode::DryRun {
         out.push(Statement::new("report.dry_run", Tone::Note, Evidence::Mode));
     }
+    // In a dry run a "trimmed" outcome is a measured process whose trim call was omitted.
+    let dry = a.mode == RunMode::DryRun;
     out.push(
-        Statement::new("report.totals", Tone::Info, Evidence::Totals)
-            .with("trimmed", Param::Count(t.trimmed as Count))
-            .with("skipped", Param::Count(t.skipped as Count))
-            .with("failed", Param::Count(t.failed as Count))
-            .with("cancelled", Param::Count(t.cancelled as Count)),
+        Statement::new(
+            if dry {
+                "report.totals_dry"
+            } else {
+                "report.totals"
+            },
+            Tone::Info,
+            Evidence::Totals,
+        )
+        .with(
+            if dry { "measured" } else { "trimmed" },
+            Param::Count(t.trimmed as Count),
+        )
+        .with("skipped", Param::Count(t.skipped as Count))
+        .with("failed", Param::Count(t.failed as Count))
+        .with("cancelled", Param::Count(t.cancelled as Count)),
     );
     if a.mode == RunMode::Trim && t.trimmed > 0 {
         out.push(
@@ -244,16 +269,28 @@ pub fn report(a: &RunAnalysis, pressure_after: Pressure) -> Vec<Statement> {
     }
     if a.faults_after > 0 {
         out.push(
-            Statement::new("report.faults", Tone::Cost, Evidence::PageFaults)
-                .with("faults", Param::Count(a.faults_after)),
+            Statement::new(
+                if dry {
+                    "report.faults_dry"
+                } else {
+                    "report.faults"
+                },
+                if dry { Tone::Note } else { Tone::Cost },
+                Evidence::PageFaults,
+            )
+            .with("faults", Param::Count(a.faults_after)),
         );
     }
     if a.paging_cost_material() {
-        out.push(
-            Statement::new("report.paging_cost", Tone::Cost, Evidence::PagingInput)
-                .with("before", Param::Count(a.paging_input_before.unwrap_or(0)))
-                .with("peak", Param::Count(a.paging_input_peak.unwrap_or(0))),
-        );
+        let peak = Param::Count(a.paging_input_peak.unwrap_or(0));
+        // Never claim a rise from a baseline that was not measured.
+        out.push(match a.paging_input_before {
+            Some(before) => Statement::new("report.paging_cost", Tone::Cost, Evidence::PagingInput)
+                .with("before", Param::Count(before))
+                .with("peak", peak),
+            None => Statement::new("report.paging_peak", Tone::Note, Evidence::PagingInput)
+                .with("peak", peak),
+        });
     }
     if t.failed > 0 {
         out.push(
@@ -354,9 +391,28 @@ mod tests {
         let a = analyse(&rec);
         let r = report(&a, Pressure::Normal);
         assert_eq!(r[0].key, "report.dry_run");
+        assert_eq!(r[1].key, "report.totals_dry");
+        assert!(
+            r[1].render_en()
+                .starts_with("2 processes measured without trimming")
+        );
         assert!(!keys(&r).contains(&"report.ws_reduced"));
+        assert!(!keys(&r).contains(&"report.faults"));
         assert!(keys(&r).contains(&"report.follow_up_truncated"));
         assert_eq!(r.last().unwrap().key, "report.responsiveness");
+    }
+
+    #[test]
+    fn paging_peak_without_baseline_claims_no_rise() {
+        let mut a = analyse(&sample_record(RunMode::Trim));
+        a.paging_input_before = None;
+        let r = report(&a, Pressure::Normal);
+        assert!(!keys(&r).contains(&"report.paging_cost"));
+        let s = r.iter().find(|s| s.key == "report.paging_peak").unwrap();
+        assert_eq!(
+            s.render_en(),
+            "Pages read from disk peaked at 400 per second during the follow-up; the rate before the run was not measured."
+        );
     }
 
     #[test]
