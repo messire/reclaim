@@ -26,7 +26,7 @@ Tasks:
 2. Cargo workspace with empty crates per ARCHITECTURE §3; `rust-toolchain.toml`; rustfmt/clippy config; `#![forbid(unsafe_code)]` in core/engine.
 3. CI: Windows + Linux jobs (fmt, clippy `-D warnings`, test), `cargo deny` (licenses, advisories, ban networking crates), binary-size report artifact.
 4. **API spike** (throwaway, in `reclaim-bench`): verify every **[verify]** item in OS-CAPABILITIES §2 on Windows 10 22H2 and 11; measure `SetProcessWorkingSetSize` duration vs WS size; check PDH init cost; record access results for elevated/other-user/protected targets.
-5. **UI toolkit spike:** identical minimal UI in Slint (software renderer) and native Win32; measure ADR-0001 gates per BENCHMARKS B1–B3, B6; Narrator/NVDA check.
+5. ~~**UI toolkit spike:** identical minimal UI in Slint (software renderer) and native Win32; measure ADR-0001 gates per BENCHMARKS B1–B3, B6~~ (CI done, see `docs/spikes/ui-toolkit.md`: Slint recommended); Narrator/NVDA check and laptop run pending.
 6. Update ADR-0001 to Accepted with measurements; update OS-CAPABILITIES with verified facts.
 
 Exit criteria: CI green on empty workspace; ADR-0001 accepted; spike report committed in `docs/spikes/`.
@@ -130,7 +130,7 @@ Exit: MVP release candidate tagged; all ACCEPTANCE §1, §2 (or documented devia
 
 | # | Question | Why it matters | Proposed default |
 |---|---|---|---|
-| Q1 | Project license? | Determines whether Slint can be used under GPLv3 or needs the royalty-free/commercial license; release notices | **Decided 2026-11-20:** free distribution → MIT. If Slint wins, it is used under its royalty-free license with the required attribution (About screen) **[verify current terms in M0]** |
+| Q1 | Project license? | Determines whether Slint can be used under GPLv3 or needs the royalty-free/commercial license; release notices | **Decided 2026-11-20:** free distribution → MIT. If Slint wins, it is used under its royalty-free license (Royalty-free 2.0, verified in M0) with the required attribution (About screen) |
 | Q2 | Minimum supported Windows version? | API availability, test matrix | **Decided 2026-11-20:** Windows 10 22H2 and Windows 11 23H2+ |
 | Q3 | Which machines are the reference hardware? | Performance targets are unverifiable without them | **Decided 2026-11-20:** the owner's laptop (`RH-OWNER`, see `docs/benchmarks/reference-hardware.md`) plus VirtualBox VMs on it for low-RAM and clean-install cases |
 | Q4 | Preference if both toolkits pass the gates? | Portability vs smallest footprint | Slint (one UI for all platforms) |
