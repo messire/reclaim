@@ -1,0 +1,20 @@
+[package]
+name = "reclaim-cli"
+description = "Headless command-line front end for Reclaim"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "reclaim-cli"
+path = "src/main.rs"
+
+[dependencies]
+reclaim-core.workspace = true
+reclaim-engine.workspace = true

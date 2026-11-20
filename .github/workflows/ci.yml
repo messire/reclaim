@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Format, banned APIs, dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: rustup show active-toolchain
+      - name: rustfmt
+        run: cargo fmt --all --check
+      - name: Banned APIs
+        run: scripts/check-banned-apis.sh
+      - name: cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+
+  linux:
+    name: Test (Linux, platform-independent crates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --workspace --locked
+
+  windows:
+    name: Build and test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Release build
+        run: cargo build --release --locked -p reclaim-app -p reclaim-cli
+      - name: Binary size report
+        shell: pwsh
+        run: |
+          "## Release binary sizes" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          "| Binary | Size |" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          "|---|---|" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          foreach ($f in "reclaim.exe", "reclaim-cli.exe") {
+            $len = (Get-Item "target/release/$f").Length
+            "| $f | $([math]::Round($len / 1KB, 1)) KiB |" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          }
+      - name: No VC++ runtime dependency
+        shell: pwsh
+        run: |
+          $dumpbin = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio" -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          if (-not $dumpbin) { throw "dumpbin.exe not found on the runner" }
+          $deps = & $dumpbin.FullName /dependents target/release/reclaim.exe
+          $deps
+          if ($deps -match 'VCRUNTIME|MSVCP|api-ms-win-crt') { throw "reclaim.exe depends on the VC++ runtime" }
+
+  api-spike:
+    name: Windows API spike (M0)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build spike
+        run: cargo build --release --locked -p reclaim-bench --bin api-spike
+      - name: Run spike
+        shell: pwsh
+        run: |
+          ./target/release/api-spike.exe --out api-spike-${{ matrix.os }}.md
+          Get-Content api-spike-${{ matrix.os }}.md | Out-File -Append $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-spike-${{ matrix.os }}
+          path: api-spike-${{ matrix.os }}.md
+      - name: Publish spike executable (for running on the reference laptop)
+        if: matrix.os == 'windows-2025'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-spike-exe
+          path: target/release/api-spike.exe
+
+  ui-spike:
+    name: UI toolkit spike (M0)
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build spikes and harness
+        # Separate invocations: `--bin` would otherwise filter the spike packages' binaries out too.
+        run: |
+          cargo build --release --locked -p spike-ui-slint -p spike-ui-win32
+          cargo build --release --locked -p reclaim-bench --bin ui-bench
+      - name: Measure Win32
+        shell: pwsh
+        run: ./target/release/ui-bench.exe --exe target/release/spike-ui-win32.exe --label "Native Win32" --runs 10 --idle-secs 60 --out ui-win32.md
+      - name: Measure Slint
+        shell: pwsh
+        run: ./target/release/ui-bench.exe --exe target/release/spike-ui-slint.exe --label "Slint (software renderer)" --runs 10 --idle-secs 60 --out ui-slint.md
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: Get-Content ui-*.md -ErrorAction SilentlyContinue | Out-File -Append $env:GITHUB_STEP_SUMMARY
+      - name: Collect artifact files
+        if: always()
+        run: |
+          New-Item -ItemType Directory -Force ui-spike | Out-Null
+          Copy-Item ui-*.md, target/release/spike-ui-win32.exe, target/release/spike-ui-slint.exe, target/release/ui-bench.exe ui-spike -ErrorAction SilentlyContinue
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-spike
+          path: ui-spike/

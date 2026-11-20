@@ -1,0 +1,48 @@
+# M0 spike: UI toolkit (Slint vs native Win32)
+
+**Status:** Complete, 2026-11-20. Results from CI and from the reference laptop (`RH-OWNER`). Decision: **Slint** (ADR-0001). The screen-reader check was dropped: the owner removed accessibility from the requirements.
+**Prototypes:** `crates/spike-ui-slint` (Slint 1.19, software renderer, winit backend, AccessKit) and `crates/spike-ui-win32` (windows-sys, common controls, virtual ListView). Both contain the ADR-0001 spike scope: system panel, 300-row sortable table, modal confirmation, tray icon, close (X) to tray and restore, and they destroy the window when it goes to the tray.
+**Harness:** `crates/reclaim-bench/src/bin/ui_bench` (`ui-bench --exe <spike>.exe --runs 10 --idle-secs 60 --out report.md`). "Ready" is a named event the spike sets once its window is shown; hiding is triggered by a second named event that behaves like pressing Close.
+**Raw reports:** [CI windows-2025](raw/ui-ci-windows-2025.md) · [reference laptop](raw/rh-owner-ui.md) (2026-11-20, elevated, under memory pressure)
+
+## 1. Results against the ADR-0001 gates
+
+| Gate | Threshold | Native Win32 | Slint (software) | Note |
+|---|---|---|---|---|
+| Start to usable UI | median < 300 ms, p95 < 450 ms | 47 / 79 ms ✅ | 20 / 198 ms ✅ | Warm start (N = 10). Cold start pending on the laptop. Slint "ready" is the first event-loop turn after `show()` (its software renderer has no rendering notifier), so its figure may be slightly optimistic. |
+| Idle private bytes, window visible | < 15 MiB preferred, < 25 MiB hard | 2.3 MiB ✅ | 5.5 MiB ✅ | |
+| Idle private bytes, tray only | < 8 MiB preferred | 2.3 MiB ✅ | 3.6 MiB ✅ | Slint keeps its runtime after the window is dropped. |
+| Idle CPU, window visible and tray | < 0.1 % average | 0.052 % / 0.000 % ✅ | 0.000 % / 0.000 % ✅ | 60 s on CI; the gate asks for 5 min on the laptop. An earlier Slint run showed 0.13 % while its tray icon failed to create; it did not reproduce after the fix. |
+| Screen reader | dropped | — | — | Removed from the requirements by the owner, 2026-11-20. |
+| Release binary size | < 10 MiB preferred | 0.30 MiB ✅ | 11.55 MiB ⚠️ | Slint misses the *preference* by 1.5 MiB. Not yet tried: `opt-level = "s"` for Slint crates, dropping unused std-widget styles. |
+| License | compatible with MIT | n/a ✅ | Royalty-free 2.0 ✅ | Attribution required in the About screen and THIRD_PARTY_NOTICES. |
+
+### Reference laptop (RH-OWNER, 300 s idle)
+
+| Gate | Native Win32 | Slint (software) |
+|---|---|---|
+| Start median / slowest of 10 | 58 / 668 ms | 25 / **2579 ms** |
+| Idle private bytes visible / tray | 2.3 / 2.3 MiB | 5.5 / 3.7 MiB |
+| Idle CPU visible / tray | **0.130** / 0.000 % | **0.125** / 0.000 % |
+
+- **Idle CPU with the window visible misses the 0.1 % gate for both, by the same amount.** The common cause is the spike's own 1 s system-panel refresh (ARCHITECTURE §4.1), which repaints labels every second; on CI without a real display the repaint was cheaper. This does not discriminate between toolkits. Product consequence: refresh only changed values, and measure a 2 s interval in M4. In the tray both are at 0.000 %.
+- **Start-up: the outliers are first launches of a freshly downloaded binary, not the toolkit.** A second run listed every start: the first start was 981 ms for Slint and **10.1 s** for Win32 (both binaries unsigned and just unzipped, so the first launch includes the anti-malware and reputation scan); every later start was 24–105 ms for Slint and 58–158 ms for Win32. Without the first launch both pass p95 < 450 ms on the laptop under memory pressure. The 2.6 s Slint start in the 10-run session was not reproduced. Consequences: code signing (PLAN Q7) matters for the first-run experience, and BENCHMARKS B1 must discard the first launch after a binary changes, or report it separately as "first launch".
+
+## 2. Reading
+
+- Both toolkits pass every measured hard gate on CI. Win32 is about 2–3× smaller in memory and 38× smaller on disk; Slint starts faster and is the only option with a path to Linux/macOS without a second UI.
+- Slint's only miss so far is the binary-size *preference* (11.55 vs 10 MiB); it is not a hard limit.
+- Development cost differs more than the numbers: the Win32 prototype needed hand-written pixel layout scaled by DPI, owner data for the table, and still lacks `WM_DPICHANGED` handling for moving between monitors; Slint's needed none of that, but its tray component is new (it failed without an explicit icon, which is not documented as mandatory).
+
+**Decision:** Slint, per the selection rule and the owner's default for Q4 (portability). The start-up outlier is explained (first launch of a new unsigned binary, affects both).
+
+## 3. Laptop run (owner, about 15 minutes)
+
+1. Download the `ui-spike` artifact of the latest green CI run on the PR and unzip it (contains `spike-ui-win32.exe`, `spike-ui-slint.exe`, `ui-bench.exe`).
+2. In a normal (not administrator) PowerShell, in that folder:
+   ```
+   .\ui-bench.exe --exe .\spike-ui-win32.exe --label "Native Win32" --runs 10 --idle-secs 300 --out ui-win32-laptop.md
+   .\ui-bench.exe --exe .\spike-ui-slint.exe --label "Slint" --runs 10 --idle-secs 300 --out ui-slint-laptop.md
+   ```
+   Each takes about 11 minutes; do not use the laptop meanwhile. For start-up only, use `--runs 20 --idle-secs 0` (under a minute); to include a cold start, run it right after a reboot.
+3. Send the `.md` files.

@@ -1,12 +1,12 @@
 # ADR-0001: Technology stack
 
-- **Status:** Proposed. Language decision proposed as accepted; UI toolkit decision **gated by the M0 spike**.
+- **Status:** Accepted (2026-11-20). Language: Rust. UI toolkit: **Slint** (software renderer), on the M0 measurements in CI and on the reference laptop ([spike report](../spikes/ui-toolkit.md)).
 - **Date:** 2026-11-20
 - **Context documents:** PRODUCT §7–8, ACCEPTANCE §2
 
 ## Context
 
-Reclaim must start in < 300 ms, idle at ≈ 0 % CPU and preferably < 15 MiB private memory, ship without a separately installed runtime, be accessible and localization-ready, keep Linux/macOS open, and contain safe, auditable code around cross-process Win32 calls. No stack is mandated; Rust + Slint is a candidate.
+Reclaim must start in < 300 ms, idle at ≈ 0 % CPU and preferably < 15 MiB private memory, ship without a separately installed runtime, be localization-ready, keep Linux/macOS open, and contain safe, auditable code around cross-process Win32 calls. No stack is mandated; Rust + Slint is a candidate.
 
 ## Options — language
 
@@ -26,7 +26,7 @@ Reclaim must start in < 300 ms, idle at ≈ 0 % CPU and preferably < 15 MiB priv
 
 | Toolkit | Footprint expectation | Startup | Accessibility (UIA) | Portability | License | Risk |
 |---|---|---|---|---|---|---|
-| **Slint** (software renderer or Skia/FemtoVG) | Moderate; software renderer avoids GPU context | Fast expected | Via AccessKit on Windows **[verify completeness: tables, lists]** | Windows, Linux, macOS | GPLv3, royalty-free (attribution required), or commercial **[verify current terms]** | Medium: license fit; table widget maturity; memory while hidden |
+| **Slint** (software renderer or Skia/FemtoVG) | Moderate; software renderer avoids GPU context | Fast expected | Via AccessKit on Windows **[verify completeness: tables, lists]** | Windows, Linux, macOS | GPLv3, Royalty-free 2.0 (attribution required, verified in M0 via cargo-deny `LicenseRef-Slint-Royalty-free-2.0`), or commercial | Medium: license fit; table widget maturity; memory while hidden |
 | **Native Win32** (direct `windows-rs`, common controls) | Smallest | Fastest | Built-in for standard controls | Windows only; per-platform UI later | n/a | Medium: more code per screen; custom drawing via GDI/Direct2D |
 | egui (eframe) | GPU context (glow/wgpu) likely adds tens of MiB | Fast | AccessKit, partial | All | MIT/Apache | High: footprint, immediate-mode redraw discipline |
 | Iced | wgpu context, larger | Medium | Limited **[verify]** | All | MIT | High: footprint, a11y |
@@ -44,9 +44,24 @@ Build the same minimal UI twice — **Slint (software renderer)** and **native W
 | Idle private bytes, window visible | < 15 MiB preferred, < 25 MiB hard limit |
 | Idle private bytes, tray only | < 8 MiB preferred |
 | Idle CPU, 5 min, window visible and tray | < 0.1 % average, no periodic wake-ups attributable to the toolkit |
-| Screen reader (Narrator, NVDA) | All controls named; table navigable; actions reachable by keyboard |
+| ~~Screen reader (Narrator, NVDA)~~ | Dropped 2026-11-20: the owner removed accessibility from the requirements |
 | Release binary size | < 10 MiB preferred |
 | License | Compatible with the chosen project license |
+
+### Spike result (2026-11-20, CI)
+
+| Gate | Native Win32 | Slint (software) |
+|---|---|---|
+| Warm start median / p95 | 47 / 79 ms | 20 / 198 ms |
+| Idle private bytes, visible / tray | 2.3 / 2.3 MiB | 5.5 / 3.6 MiB |
+| Idle CPU, visible / tray (60 s) | 0.052 / 0.000 % | 0.000 / 0.000 % |
+| Release binary | 0.30 MiB | 11.55 MiB (preference < 10 MiB missed) |
+| Screen reader | not required | not required |
+| License | n/a | Slint Royalty-free 2.0, attribution in About and THIRD_PARTY_NOTICES |
+
+Both pass every measured hard gate; Slint misses only the binary-size preference. On the reference laptop (300 s idle, under memory pressure) both show ≈ 0.13 % idle CPU with the window visible, caused by the spikes' own 1 s panel refresh rather than the toolkit, and both start in 24–158 ms after the first launch of a new binary (first launch: Slint 1 s, Win32 10 s, an anti-malware scan of the unsigned file). The screen-reader gate was dropped by the owner.
+
+**Decision: Slint**, per the selection rule and PLAN Q4 (one UI for all platforms). Follow-ups for M4: refresh only changed values and measure a 2 s interval against the idle CPU gate; try `opt-level = "s"` for Slint crates against the 10 MiB size preference; give the tray an explicit icon (required by Slint).
 
 **Selection rule:** choose Slint if it passes all gates (portability benefit). Otherwise choose native Win32 for Windows, and decide the per-platform UI approach for phase 4 then. The ViewModel layer (ARCHITECTURE §3) keeps either choice from leaking into core or engine.
 

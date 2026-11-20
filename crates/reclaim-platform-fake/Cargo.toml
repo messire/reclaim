@@ -1,0 +1,15 @@
+[package]
+name = "reclaim-platform-fake"
+description = "Scriptable fake platform for testing Reclaim's core and engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+reclaim-core.workspace = true
