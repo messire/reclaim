@@ -96,6 +96,10 @@ pub trait SystemMetrics {
     fn sample_detailed(&mut self) -> Result<SystemSnapshot, PlatformError> {
         self.sample()
     }
+    /// Loads or unloads the optional detailed counters; returns whether they are loaded.
+    fn set_details(&mut self, _on: bool) -> bool {
+        false
+    }
 }
 
 /// An open, validated process. Holding it keeps the identity valid.
@@ -106,6 +110,8 @@ pub trait ProcessHandle: fmt::Debug {
     fn memory(&self) -> Result<MemorySnapshot, PlatformError>;
     /// True if the process has exited.
     fn has_exited(&self) -> bool;
+    /// Lets an adapter recover its own concrete handle type.
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Enumerates and opens processes.

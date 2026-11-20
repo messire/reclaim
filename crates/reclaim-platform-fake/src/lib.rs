@@ -285,6 +285,10 @@ impl ProcessHandle for FakeHandle {
             .find(|p| p.info.key == self.key)
             .is_none_or(|p| !p.alive)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl ProcessSource for FakePlatform {
@@ -408,6 +412,7 @@ mod tests {
 
         let h = f.open(ok).unwrap();
         assert_eq!(h.key(), ok);
+        assert!(h.as_any().downcast_ref::<FakeHandle>().is_some());
         f.reclaim(h.as_ref(), ReclaimAction::TrimWorkingSet)
             .unwrap();
         assert_eq!(h.memory().unwrap().working_set, Bytes::from_mib(5));
