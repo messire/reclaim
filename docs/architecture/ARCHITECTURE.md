@@ -136,17 +136,17 @@ All values are stored as `u64` bytes (`Bytes` newtype). Display uses IEC units (
 |---|---|---|---|
 | `sys.phys_total` | Installed memory | Physical RAM visible to the OS | `GlobalMemoryStatusEx.ullTotalPhys` |
 | `sys.phys_available` | Available | Free + zeroed + standby pages; immediately reusable | `ullAvailPhys` |
-| `sys.commit_charge` | Committed | Virtual memory promised to processes and the system; trimming does **not** reduce it | `GetPerformanceInfo.CommitTotal` |
-| `sys.commit_limit` | Commit limit | RAM + page file(s) | `CommitLimit` |
-| `sys.standby` | Standby (cached) | Cached pages that can be repurposed; part of Available | PDH `\Memory\Standby Cache *` (optional) |
-| `sys.modified` | Modified | Dirty pages waiting to be written to disk; trimming can increase it | PDH `\Memory\Modified Page List Bytes` (optional) |
+| `sys.commit_charge` | Committed | Virtual memory promised to processes and the system; trimming does **not** reduce it | `GlobalMemoryStatusEx`: `ullTotalPageFile − ullAvailPageFile` (≈ 1 µs; `GetPerformanceInfo` costs ≈ 0.5 ms, used only for run snapshots, spike A6) |
+| `sys.commit_limit` | Commit limit | RAM + page file(s) | `ullTotalPageFile` |
+| `sys.standby` | Standby (cached) | Cached pages that can be repurposed; part of Available | PDH `\Memory\Standby Cache *` (optional, on demand only: "Memory details" panel) |
+| `sys.modified` | Modified | Dirty pages waiting to be written to disk; trimming can increase it | PDH `\Memory\Modified Page List Bytes` (optional, on demand only) |
 | `sys.pressure` | Memory pressure | Low / Normal / High signal | `QueryMemoryResourceNotification` (+ derived from available/commit ratio) |
 | `proc.working_set` | Working set | Physical pages currently mapped for the process, shared pages included | `PROCESS_MEMORY_COUNTERS.WorkingSetSize` |
 | `proc.private_ws` | Private working set | Part of the working set not shared | `PROCESS_MEMORY_COUNTERS_EX2.PrivateWorkingSetSize` (newer builds; optional) |
 | `proc.private_bytes` | Private bytes (commit) | Private committed memory; trimming does **not** reduce it | `PrivateUsage` |
 | `proc.page_faults` | Page faults | Cumulative soft + hard faults | `PageFaultCount` |
 | `proc.io` | I/O | Cumulative read/write bytes and operations | `GetProcessIoCounters` (optional) |
-| `sys.hard_faults_rate` | Pages read from disk /s | System-wide paging input, used as a cost indicator | PDH `\Memory\Pages Input/sec` (optional) |
+| `sys.hard_faults_rate` | Pages read from disk /s | System-wide paging input, used as a cost indicator | PDH `\Memory\Pages Input/sec` (optional, loaded only for a run's follow-up window) |
 
 Optional metrics are `Option<T>` in the model. The UI renders an unavailable metric as "not available" with the reason, never as zero.
 
@@ -180,7 +180,7 @@ Eligibility is a pure function: `fn evaluate(p: &ProcessInfo, policy: &Policy, c
 Evaluation order (first match wins; every result carries a reason shown to the user):
 
 1. `Self_` — the Reclaim process itself.
-2. `SystemCritical` — PID 0/4, processes reporting `IsProcessCritical`, and the built-in protected list (`OS-CAPABILITIES.md §4`). Not overridable from the UI.
+2. `SystemCritical` — PID 0/4, the built-in system-critical list (`OS-CAPABILITIES.md §4`), and processes reporting `IsProcessCritical`. The list is authoritative: the flag misses `lsass.exe` and `winlogon.exe` (spike A4). Not overridable from the UI.
 3. `UserExcluded(rule)` — user rule match (image name, optionally with path hash; wildcards not supported in the MVP).
 4. `Protected(rule)` — default "caution" list (compositor, audio, shell, input). Overridable by the user with an explicit warning.
 5. `Foreground` — owns the foreground window. Overridable per run.
@@ -246,7 +246,7 @@ trait Clock           { fn now(&self) -> Instant; }
   - when it signals: publish `Pressure::Low`, remove the low handle from the wait set, wait on the high-memory handle instead, and arm one coalesced re-check timer (30 s) that calls `QueryMemoryResourceNotification` to detect a return to the middle band, where neither handle is signaled;
   - when the high handle signals or the re-check finds low no longer signaled: publish the new state and go back to waiting on the low handle.
   The engine therefore wakes at most once per state change, plus once every 30 s while memory stays low.
-- PDH: `pdh.dll` is loaded at run time (`LoadLibraryExW` restricted to System32, not imported), opened only while the window is visible or a run follow-up is active, and closed and unloaded (`FreeLibrary`) when hidden, so its memory is actually released.
+- PDH: `pdh.dll` is loaded at run time (`LoadLibraryExW` restricted to System32, not imported) and only on demand: when the user opens the "Memory details" panel, or for a run's follow-up window. Opening a query costs ≈ 250 ms and ≈ 5–6 MiB; after close and `FreeLibrary` ≈ 2 MiB stays resident (spike A7), so PDH is never used on the startup or idle path. It runs on the engine thread, never the UI thread.
 - All handles are wrapped in an RAII type; no raw `HANDLE` escapes the crate.
 
 ## 7. Run state machine
@@ -261,7 +261,7 @@ Idle ──PlanRun──▶ Planned ──StartRun──▶ Running ──done�
 - **Running:** sequential loop over targets, largest working set first. Before each target, check the cancel flag; per-process time is bounded by the OS call itself.
 - **Cancel semantics:** a call in progress completes; remaining targets become `Cancelled`; follow-up sampling still runs for already-trimmed processes (so the user sees the rebound of what was done) unless the user cancels follow-up too.
 - **Concurrency:** only one run at a time. During FollowUp, a new run can be planned; starting it finalizes the current run early and marks the follow-up as truncated.
-- **Process exit during run:** detected by `WaitForSingleObject(h, 0)` on the `SYNCHRONIZE` handle (or `GetExitCodeProcess` as a fallback) / failed calls → `Failed(Exited)`; never an error dialog.
+- **Process exit during run:** detected by `WaitForSingleObject(h, 0)` on the `SYNCHRONIZE` handle (or `GetExitCodeProcess` as a fallback) / failed calls → `Failed(Exited)`; never an error dialog. The exit check comes **before** interpreting `ERROR_ACCESS_DENIED`, because trimming an exited process fails with that code (spike A13).
 - **Late samples:** every follow-up sample stores its actual timestamp; a sample more than 2 s later than its target (sleep/resume, heavy load) is flagged in the report instead of being presented as "+60 s" (review F24).
 - **Held handles:** handles of trimmed processes are kept until Finalized so identities stay valid; a process that exits meanwhile keeps only a small kernel object alive, released at Finalized or Quit (review F25).
 - **Internal errors:** each command is executed inside `catch_unwind`; a panic becomes an internal-error outcome in the run record and the engine stays alive (review F22).
@@ -271,7 +271,7 @@ Idle ──PlanRun──▶ Planned ──StartRun──▶ Running ──done�
 
 ### 8.1 Screens
 
-1. **Overview** (default): system panel (Available, Committed / limit, Standby, Pressure) with one-line explanations; primary action "Trim working sets…"; last run summary.
+1. **Overview** (default): system panel (Available, Committed / limit, Pressure) with one-line explanations, and a collapsed "Memory details" panel (standby, modified, free) that loads PDH when expanded; primary action "Trim working sets…"; last run summary.
 2. **Processes:** sortable table (name, working set, private WS, private bytes, eligibility reason). Per-row exclude/include. Search by name.
 3. **Plan confirmation:** counts by reason, target list, warning text about faults and rebound, buttons "Trim", "Dry run", "Cancel".
 4. **Result:** statements from `report` (§5.6), table of per-process outcomes with filters (trimmed/skipped/failed), live follow-up at +10 s/+60 s.

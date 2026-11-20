@@ -91,3 +91,9 @@ jobs:
         with:
           name: api-spike-${{ matrix.os }}
           path: api-spike-${{ matrix.os }}.md
+      - name: Publish spike executable (for running on the reference laptop)
+        if: matrix.os == 'windows-2025'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-spike-exe
+          path: target/release/api-spike.exe
