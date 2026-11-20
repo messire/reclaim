@@ -3517,6 +3517,10 @@ dependencies = [
 name = "reclaim-bench"
 version = "0.0.0"
 dependencies = [
+ "reclaim-core",
+ "reclaim-engine",
+ "reclaim-platform-fake",
+ "reclaim-platform-windows",
  "windows-sys 0.61.2",
 ]
 
