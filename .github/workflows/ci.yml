@@ -105,7 +105,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - name: Build spikes and harness
-        run: cargo build --release --locked -p spike-ui-slint -p spike-ui-win32 -p reclaim-bench --bin ui-bench
+        # Separate invocations: `--bin` would otherwise filter the spike packages' binaries out too.
+        run: |
+          cargo build --release --locked -p spike-ui-slint -p spike-ui-win32
+          cargo build --release --locked -p reclaim-bench --bin ui-bench
       - name: Measure Win32
         shell: pwsh
         run: ./target/release/ui-bench.exe --exe target/release/spike-ui-win32.exe --label "Native Win32" --runs 10 --idle-secs 60 --out ui-win32.md
