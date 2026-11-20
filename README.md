@@ -31,6 +31,18 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 - [Architecture decision records](docs/adr/)
 - [Implementation plan](docs/PLAN.md)
 
+## Building
+
+Requires the Rust toolchain pinned in `rust-toolchain.toml` (installed automatically by `rustup`).
+
+```sh
+cargo test --workspace                 # platform-independent crates, any OS
+cargo build --release -p reclaim-app   # Windows: reclaim.exe
+cargo run --release -p reclaim-bench --bin api-spike -- --out api-spike.md   # Windows: M0 API spike report
+```
+
+Workspace layout follows [ARCHITECTURE §3](docs/architecture/ARCHITECTURE.md#3-logical-architecture). As of milestone M0 the crates are skeletons.
+
 ## Initial engineering task
 
 Evaluate suitable native technology stacks and OS capabilities; propose an architecture, risks, benchmarks and a phased MVP implementation plan. Document tradeoffs and open decisions before building the full application.

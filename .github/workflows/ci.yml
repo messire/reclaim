@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Format, banned APIs, dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: rustup show active-toolchain
+      - name: rustfmt
+        run: cargo fmt --all --check
+      - name: Banned APIs
+        run: scripts/check-banned-apis.sh
+      - name: cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+
+  linux:
+    name: Test (Linux, platform-independent crates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --workspace --locked
+
+  windows:
+    name: Build and test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Release build
+        run: cargo build --release --locked -p reclaim-app -p reclaim-cli
+      - name: Binary size report
+        shell: pwsh
+        run: |
+          "## Release binary sizes" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          "| Binary | Size |" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          "|---|---|" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          foreach ($f in "reclaim.exe", "reclaim-cli.exe") {
+            $len = (Get-Item "target/release/$f").Length
+            "| $f | $([math]::Round($len / 1KB, 1)) KiB |" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          }
+      - name: No VC++ runtime dependency
+        shell: pwsh
+        run: |
+          $dumpbin = Get-ChildItem "${env:ProgramFiles}\Microsoft Visual Studio" -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          if (-not $dumpbin) { throw "dumpbin.exe not found on the runner" }
+          $deps = & $dumpbin.FullName /dependents target/release/reclaim.exe
+          $deps
+          if ($deps -match 'VCRUNTIME|MSVCP|api-ms-win-crt') { throw "reclaim.exe depends on the VC++ runtime" }
+
+  api-spike:
+    name: Windows API spike (M0)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build spike
+        run: cargo build --release --locked -p reclaim-bench --bin api-spike
+      - name: Run spike
+        shell: pwsh
+        run: |
+          ./target/release/api-spike.exe --out api-spike-${{ matrix.os }}.md
+          Get-Content api-spike-${{ matrix.os }}.md | Out-File -Append $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-spike-${{ matrix.os }}
+          path: api-spike-${{ matrix.os }}.md

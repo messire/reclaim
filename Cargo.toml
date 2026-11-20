@@ -1,0 +1,46 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+default-members = [
+    "crates/reclaim-core",
+    "crates/reclaim-platform-fake",
+    "crates/reclaim-engine",
+    "crates/reclaim-cli",
+    "crates/reclaim-app",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+repository = "https://github.com/messire/reclaim"
+publish = false
+
+[workspace.dependencies]
+reclaim-core = { path = "crates/reclaim-core" }
+reclaim-engine = { path = "crates/reclaim-engine" }
+reclaim-platform-fake = { path = "crates/reclaim-platform-fake" }
+reclaim-platform-windows = { path = "crates/reclaim-platform-windows" }
+windows-sys = "0.61"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+# Keep unwinding so the engine can contain a failing command (ARCHITECTURE §7, review F22).
+panic = "unwind"
+
+[profile.release-small]
+inherits = "release"
+opt-level = "s"
