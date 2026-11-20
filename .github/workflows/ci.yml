@@ -72,6 +72,18 @@ jobs:
           ./target/release/reclaim-cli.exe list --eligible
           ./target/release/reclaim-cli.exe trim --dry-run --no-follow-up --json | Out-File cli-dry-run.json
           if ((Get-Item cli-dry-run.json).Length -lt 100) { throw "dry run produced no record" }
+      - name: App start-up and idle (B1-B3 smoke)
+        shell: pwsh
+        run: |
+          cargo build --release --locked -p reclaim-bench --bin ui-bench
+          ./target/release/ui-bench.exe --exe target/release/reclaim.exe --label "Reclaim" --runs 5 --idle-secs 20 --out ui-reclaim.md
+          Get-Content ui-reclaim.md | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          New-Item -ItemType Directory -Force reclaim-build | Out-Null
+          Copy-Item ui-reclaim.md, target/release/reclaim.exe, target/release/reclaim-cli.exe, target/release/ui-bench.exe reclaim-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reclaim-windows-build
+          path: reclaim-build
       - name: Binary size report
         shell: pwsh
         run: |
