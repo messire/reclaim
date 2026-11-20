@@ -37,4 +37,4 @@ Evaluate suitable native technology stacks and OS capabilities; propose an archi
 
 ## License
 
-A project license has not yet been selected. Reference projects have their own licenses; comply with their terms if incorporating code.
+Reclaim is released under the [MIT License](LICENSE) (decided 2026-11-20: free distribution, permissive). Reference projects have their own licenses; comply with their terms if incorporating code.

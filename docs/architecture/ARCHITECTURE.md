@@ -285,7 +285,7 @@ No animations except progress indication during a run. No charts in the MVP (avo
 - Tray icon via `Shell_NotifyIconW` (`NOTIFYICON_VERSION_4`), menu: Open, Trim working sets…, Quit.
 - Tooltip text is computed on hover (`NIN_POPUPOPEN`), not by polling.
 - The `TaskbarCreated` registered window message is handled to re-add the icon after Explorer restarts (review F23).
-- **Close (X)** behaviour: owner decision (see PLAN open questions). Default proposal: first close shows a one-time choice "Keep in tray / Quit"; stored in settings.
+- **Close (X)** behaviour (owner decision, 2026-11-20): the window goes to the tray. The first time, a one-time tray notification says that Reclaim keeps running and how to quit. A setting allows "Close quits" for users who prefer it.
 - Hiding to tray destroys the window and frees renderer resources where the toolkit allows it (verified in the M0 spike); the engine stays, idle.
 - **Quit** always stops all work, releases handles, removes the tray icon and exits the process. No background work survives Quit.
 

@@ -32,10 +32,10 @@ There is no code, build system, CI, license, issue tracker content or UX materia
 
 ### 3.1 Blocking decisions (must be made before or during M0)
 
-1. **Project license.** Not selected. It constrains the UI toolkit: Slint is available under GPLv3, a royalty-free license with attribution requirements, or a paid license. It also governs whether Roomy (MIT) code can be adapted later (it can under almost any license, with notice).
+1. **Project license.** *Decided 2026-11-20: MIT (free distribution).* Originally not selected. It constrains the UI toolkit: Slint is available under GPLv3, a royalty-free license with attribution requirements, or a paid license. It also governs whether Roomy (MIT) code can be adapted later (it can under almost any license, with notice).
 2. **UI toolkit.** "Rust + Slint is a candidate". The 15 MiB idle private memory and < 300 ms startup targets cannot be judged on paper; a measured spike is required (see ADR-0001).
-3. **Reference hardware.** `ACCEPTANCE.md` asks for it but none is defined. Without it, no performance target is verifiable. `BENCHMARKS.md` proposes two profiles; the owner must confirm which physical machines exist.
-4. **Minimum Windows version.** "Windows 10/11 x64" is broad. Windows 10 22H2 is the last Windows 10 release (mainstream support ended October 2025). Some useful APIs (for example `PROCESS_MEMORY_COUNTERS_EX2`) only exist on newer builds. Proposal: Windows 10 22H2 and Windows 11 23H2+, with graceful degradation where an API is missing.
+3. **Reference hardware.** `ACCEPTANCE.md` asks for it but none is defined. Without it, no performance target is verifiable. `BENCHMARKS.md` proposes two profiles; the owner must confirm which physical machines exist. *Update 2026-11-20: only the owner's machine is available; see BENCHMARKS §1.*
+4. **Minimum Windows version.** *Decided 2026-11-20: Windows 10 22H2 and Windows 11 23H2+.* "Windows 10/11 x64" is broad. Windows 10 22H2 is the last Windows 10 release (mainstream support ended October 2025). Some useful APIs (for example `PROCESS_MEMORY_COUNTERS_EX2`) only exist on newer builds. Proposal: Windows 10 22H2 and Windows 11 23H2+, with graceful degradation where an API is missing.
 
 ### 3.2 Missing definitions
 

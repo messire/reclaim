@@ -2,13 +2,17 @@
 
 **Status:** proposed procedure for verifying `ACCEPTANCE.md §2–3`. Results are only claims once produced by this procedure on declared reference hardware and archived.
 
-## 1. Reference hardware (to be confirmed by the owner)
+## 1. Reference hardware
 
-| Profile | Purpose | Proposed spec |
+Only one physical machine is available (owner decision, 2026-11-20). Profiles are therefore built on it:
+
+| Profile | Purpose | Setup |
 |---|---|---|
-| **RH-LOW** | Memory-constrained laptop, where trimming matters most | 4 cores, 8 GiB RAM, SATA or entry NVMe SSD, Windows 11 23H2+ on battery and AC |
-| **RH-MID** | Typical desktop | 8+ cores, 16 GiB RAM, NVMe SSD, Windows 10 22H2 |
-| **VM-CLEAN** | Clean-install compatibility, no runtimes | Hyper-V / VirtualBox image of Windows 10 22H2 and 11, no VC++ redistributable, no .NET extras |
+| **RH-OWNER** | The reference machine for all footprint targets (B1–B8) | The owner's machine as is; specs recorded in `docs/benchmarks/reference-hardware.md` (to be filled in) |
+| **VM-LOW** | Memory-constrained case, where trimming matters most | Hyper-V VM on RH-OWNER: 4 vCPU, 8 GiB (and 4 GiB) RAM, Windows 11 23H2+. Used for effectiveness scenarios S5 and pressure tests |
+| **VM-CLEAN** | Clean-install compatibility, no runtimes | Hyper-V VMs on RH-OWNER: Windows 10 22H2 and Windows 11, no VC++ redistributable, no .NET extras |
+
+Limitations, stated in every summary: VM results are not equivalent to a real low-end laptop (virtualized disk, no battery), and one machine cannot show hardware variance. Scenario S8 (battery) is skipped unless RH-OWNER is a laptop. Free Hyper-V needs Windows Pro/Enterprise/Education; on Home, VirtualBox is used instead.
 
 Each result file records: CPU, RAM, disk, Windows build, power plan, AC/battery, Reclaim commit hash, toolchain version, background apps.
 
@@ -44,7 +48,7 @@ Targets for B1–B6 are those of `ACCEPTANCE.md §2` and the ADR-0001 gates.
 | W-STD | Browser with 20 tabs (mixed sites, saved offline copies for repeatability), an editor/IDE, a chat client, a file manager window: ~150–300 processes |
 | W-HOT | W-STD plus a recently memory-intensive app (probe `alloc-touch` allocated 2 GiB, touched, then idle) |
 | W-FG | W-STD with an interactive foreground probe (§5) |
-| W-PRESSURE | RH-LOW with probes allocating until Available < 10 % (high pressure) |
+| W-PRESSURE | VM-LOW with probes allocating until Available < 10 % (high pressure) |
 | W-PROT | Includes elevated process (probe started elevated), another-user process, and protected system processes |
 | W-RACE | Probes that exit at random intervals (10–500 ms) during planning and trimming |
 
@@ -66,7 +70,7 @@ Captured per arm (matches ACCEPTANCE §3):
 
 1. T0: available physical, commit, standby/modified (if available), per-process WS/private bytes.
 2. Actions attempted, skipped with reason, failures, elapsed time.
-3. T1, T+10 s, T+60 s samples (plus T+5 min in RH-LOW scenarios).
+3. T1, T+10 s, T+60 s samples (plus T+5 min in VM-LOW scenarios).
 4. Rebound per process and in total; page-fault deltas; system `Pages Input/sec` time series; disk bytes; `latency` probe pass times.
 5. Arm-to-arm comparison table.
 
@@ -79,7 +83,7 @@ Captured per arm (matches ACCEPTANCE §3):
 | S5 | W-PRESSURE | Under high pressure, does trimming help the foreground probe's latency or hurt it? |
 | S6 | W-PROT | Are protected/elevated/other-user processes skipped and reported correctly? |
 | S7 | W-RACE | No crash, no wrong-process action, outcomes `Exited` reported |
-| S8 | RH-LOW on battery | Cost of modified-page writes (disk activity) |
+| S8 | RH-OWNER on battery (only if it is a laptop) | Cost of modified-page writes (disk activity) |
 
 **Pass condition** (from ACCEPTANCE §3): correct and safe behaviour plus honest reporting. A lower working set alone is not a pass. Any arm where the `latency` probe's p95 pass time after trimming exceeds the control by > 20 % is recorded as a **regression**, regardless of available memory.
 
