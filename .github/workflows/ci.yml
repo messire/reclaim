@@ -104,6 +104,50 @@ jobs:
           $deps
           if ($deps -match 'VCRUNTIME|MSVCP|api-ms-win-crt') { throw "reclaim.exe depends on the VC++ runtime" }
 
+  bench-smoke:
+    name: Benchmark smoke (M5, probes only)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build harness
+        run: cargo build --release --locked -p reclaim-bench --bin reclaim-probe --bin reclaim-scenario --bin reclaim-soak
+      - name: Soak (B8, 200 cycles, follow-up shortened)
+        shell: pwsh
+        run: |
+          ./target/release/reclaim-soak.exe --cycles 200 --out soak.md
+          if ($LASTEXITCODE -ne 0) { throw "soak failed" }
+          Get-Content soak.md | Out-File -Append $env:GITHUB_STEP_SUMMARY
+      - name: Scenarios S3, S6, S7 (quick, probes only)
+        shell: pwsh
+        run: |
+          foreach ($s in "S3", "S6", "S7") {
+            $extra = if ($s -eq "S3") { @("--size", "512") } else { @() }
+            ./target/release/reclaim-scenario.exe --scenario $s --quick --probes-only --label ci @extra | Out-File -Append $env:GITHUB_STEP_SUMMARY
+            if ($LASTEXITCODE -ne 0) { throw "scenario $s reported a finding or failed ($LASTEXITCODE)" }
+          }
+      - name: Size of reclaim.exe with opt-level "s" (B6 comparison)
+        shell: pwsh
+        run: |
+          cargo build --profile release-small --locked -p reclaim-app
+          $len = (Get-Item target/release-small/reclaim.exe).Length
+          "## reclaim.exe, profile release-small: $([math]::Round($len / 1MB, 2)) MiB" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-smoke
+          path: |
+            soak.md
+            bench-results
+      - name: Publish harness (for the reference laptop)
+        uses: actions/upload-artifact@v4
+        with:
+          name: reclaim-bench-exe
+          path: |
+            target/release/reclaim-probe.exe
+            target/release/reclaim-scenario.exe
+            target/release/reclaim-soak.exe
+
   # The M0 spikes are evidence for decisions already taken; they run only on demand
   # (Actions → CI → Run workflow) to keep pull-request CI short.
   api-spike:

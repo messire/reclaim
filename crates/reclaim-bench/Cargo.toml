@@ -26,7 +26,27 @@ path = "src/bin/api_spike/main.rs"
 name = "ui-bench"
 path = "src/bin/ui_bench/main.rs"
 
+[[bin]]
+name = "reclaim-probe"
+path = "src/bin/probe/main.rs"
+
+[[bin]]
+name = "reclaim-scenario"
+path = "src/bin/scenario/main.rs"
+
+[[bin]]
+name = "reclaim-soak"
+path = "src/bin/soak/main.rs"
+
+[dependencies]
+reclaim-core.workspace = true
+reclaim-engine.workspace = true
+
+[dev-dependencies]
+reclaim-platform-fake.workspace = true
+
 [target.'cfg(windows)'.dependencies]
+reclaim-platform-windows.workspace = true
 windows-sys = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_Security",
