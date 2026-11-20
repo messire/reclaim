@@ -289,9 +289,9 @@ No animations except progress indication during a run. No charts in the MVP (avo
 - Hiding to tray destroys the window and frees renderer resources where the toolkit allows it (verified in the M0 spike); the engine stays, idle.
 - **Quit** always stops all work, releases handles, removes the tray icon and exits the process. No background work survives Quit.
 
-### 8.3 Accessibility and localization
+### 8.3 Display and localization
 
-- Accessibility: keyboard-only operation, visible focus, screen-reader names for all controls (UI Automation), high-contrast mode, Per-Monitor V2 DPI awareness. Toolkit acceptance depends on this (ADR-0001).
+- Display: Per-Monitor V2 DPI awareness. Screen-reader accessibility was removed from the requirements by the owner (2026-11-20); whatever the toolkit provides by default is kept, but it is not tested or gated.
 - Localization: all user-visible strings in resource files from day one (English only in MVP). Numbers and units formatted via a single formatter. Report statements are keys + parameters.
 
 ## 9. Persistence, logging and privacy

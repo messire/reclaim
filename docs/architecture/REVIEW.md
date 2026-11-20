@@ -28,7 +28,7 @@ Severity: **Blocker** = violates a stated requirement or DoD item; **Major** = l
 | F13 | Major | Cancel button with no defined semantics | ACCEPTANCE §1: cancel where technically feasible | Cooperative cancel between processes, defined outcome `Cancelled`, follow-up behaviour defined (ARCH §7) |
 | F14 | Major | Close button hides the window; Quit only from tray | ACCEPTANCE §4: predictable tray lifecycle; Quit stops background work | Explicit Close vs Quit semantics; first-close choice; Quit releases everything (ARCH §8.2) |
 | F15 | Minor | History stores executable full paths and command lines for diagnostics | ACCEPTANCE §4: logs must not expose sensitive filenames unnecessarily | Image names only; no command lines or titles; capped files; clear button (ARCH §9) |
-| F16 | Minor | Accessibility and localization "later" | PRODUCT §7: accessible, localization-ready UI | Toolkit gate includes screen-reader test; strings externalized from day one (ARCH §8.3) |
+| F16 | Minor | Accessibility and localization "later" | PRODUCT §7: accessible, localization-ready UI | Strings externalized from day one (ARCH §8.3). Accessibility later removed from requirements by the owner (2026-11-20) |
 | F17 | Minor | Policy checks embedded in the Windows adapter | ACCEPTANCE §6: automated tests for pure logic | Eligibility is a pure function in `core` with a fake platform (ARCH §3.1, §10) |
 | F18 | Minor | Window hidden but kept alive in tray mode | Idle memory target | Destroy window on hide where toolkit allows; measured in M0 (ARCH §8.2) |
 | F19 | Minor | No handle-leak test | ACCEPTANCE §4: repeated runs do not leak handles | Soak test with handle/GDI/USER counts (ARCH §10) |
@@ -78,4 +78,4 @@ Severity: **Blocker** = violates a stated requirement or DoD item; **Major** = l
 | Storage phase safety (ACC §5) | Reserved design (ARCH §12.1) | Future phase | Phase 2 |
 | ADR, tech comparison, OS risk analysis, milestones, benchmark method (ACC §6) | `docs/adr/`, `OS-CAPABILITIES.md`, `PLAN.md`, `BENCHMARKS.md` | This PR | — |
 | Unit + integration tests; reproducible builds; manual checklist (ACC §6) | ARCH §10–11 | CI; release workflow | M0–M6 |
-| Accessible, localization-ready (PROD §7) | ARCH §8.3; toolkit gate | Narrator/NVDA checks | M0, M4, M6 |
+| Localization-ready (PROD §7; accessibility removed 2026-11-20) | ARCH §8.3 | String-resource check | M4 |

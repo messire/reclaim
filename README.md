@@ -22,7 +22,7 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 
 ## Development status
 
-**M0 (foundations and spikes).** Rust, a single unelevated process, documented Win32 APIs only. Spike results: [Windows API](docs/spikes/windows-api.md), [UI toolkit](docs/spikes/ui-toolkit.md) (Slint recommended, pending a screen-reader check). See [Product requirements](docs/PRODUCT.md), [Acceptance criteria](docs/ACCEPTANCE.md), [References](docs/REFERENCES.md), and the architecture set:
+**M0 (foundations and spikes).** Rust, a single unelevated process, documented Win32 APIs only. Spike results: [Windows API](docs/spikes/windows-api.md), [UI toolkit](docs/spikes/ui-toolkit.md) (Slint chosen). See [Product requirements](docs/PRODUCT.md), [Acceptance criteria](docs/ACCEPTANCE.md), [References](docs/REFERENCES.md), and the architecture set:
 
 - [Gap analysis](docs/architecture/ANALYSIS.md)
 - [Architecture](docs/architecture/ARCHITECTURE.md) and its [critical review](docs/architecture/REVIEW.md)
