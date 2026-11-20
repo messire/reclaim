@@ -22,7 +22,14 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 
 ## Development status
 
-**Planning.** No language, UI toolkit or architecture has been selected yet. Rust + Slint is a candidate, not a requirement. See [Product requirements](docs/PRODUCT.md), [Acceptance criteria](docs/ACCEPTANCE.md), and [References](docs/REFERENCES.md).
+**Planning.** An architecture is proposed: Rust, a single unelevated process, documented Win32 APIs only, and a UI toolkit (Slint or native Win32) to be chosen by a measured spike. See [Product requirements](docs/PRODUCT.md), [Acceptance criteria](docs/ACCEPTANCE.md), [References](docs/REFERENCES.md), and the architecture set:
+
+- [Gap analysis](docs/architecture/ANALYSIS.md)
+- [Architecture](docs/architecture/ARCHITECTURE.md) and its [critical review](docs/architecture/REVIEW.md)
+- [OS capabilities and risks](docs/architecture/OS-CAPABILITIES.md)
+- [Benchmark methodology](docs/architecture/BENCHMARKS.md)
+- [Architecture decision records](docs/adr/)
+- [Implementation plan](docs/PLAN.md)
 
 ## Initial engineering task
 
