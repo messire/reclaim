@@ -3505,6 +3505,7 @@ dependencies = [
 name = "reclaim-app"
 version = "0.0.0"
 dependencies = [
+ "raw-window-handle",
  "reclaim-core",
  "reclaim-engine",
  "reclaim-platform-fake",
@@ -3952,6 +3953,7 @@ dependencies = [
  "i-slint-renderer-software",
  "once_cell",
  "pin-weak",
+ "raw-window-handle",
  "slint-macros",
  "vtable",
 ]

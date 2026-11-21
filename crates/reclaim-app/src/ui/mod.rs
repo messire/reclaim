@@ -23,7 +23,7 @@ use reclaim_core::report::Tone;
 use reclaim_engine::{Command, EngineHandle, Event, StdClock, Store, spawn};
 use reclaim_platform_windows::WindowsPlatform;
 
-use view::{MainWindow, ReportLine, Tray};
+use view::{MainWindow, ProcRow, ReportLine, Tray};
 
 struct App {
     state: AppState,
@@ -108,6 +108,9 @@ impl App {
             w.set_total(o.total.into());
             w.set_load(o.load.into());
             w.set_committed(o.committed.into());
+            w.set_available_permille(i32::from(o.available_permille));
+            w.set_commit_permille(i32::from(o.commit_permille));
+            w.set_pressure_high(o.pressure_high);
             w.set_pressure(o.pressure.into());
             w.set_standby(o.standby.into());
             w.set_modified(o.modified.into());
@@ -122,16 +125,22 @@ impl App {
             w.set_selected_count(s.selected_count() as i32);
             // A recreated window starts unchecked: restore the filter it shows.
             w.set_eligible_only(s.eligible_only());
-            w.set_rows(table(rows.into_iter().map(|r| {
-                vec![
-                    if r.selected { "✓" } else { "" }.to_owned(),
-                    r.name,
-                    r.pid,
-                    r.working_set,
-                    r.private_bytes,
-                    r.status,
-                ]
-            })));
+            let (col, asc) = s.sort();
+            w.set_sort_column(col.index() as i32 + 1);
+            w.set_sort_ascending(asc);
+            let rows: Vec<ProcRow> = rows
+                .into_iter()
+                .map(|r| ProcRow {
+                    selected: r.selected,
+                    name: r.name.into(),
+                    pid: r.pid.into(),
+                    working_set: r.working_set.into(),
+                    private_bytes: r.private_bytes.into(),
+                    status: r.status.into(),
+                    eligible: r.eligible,
+                })
+                .collect();
+            w.set_rows(ModelRc::new(VecModel::from(rows)));
         }
         if d.plan {
             match s.plan() {
@@ -254,6 +263,18 @@ fn build() -> Option<MainWindow> {
     Some(w)
 }
 
+/// Asks DWM for a dark caption that matches the window background. Cosmetic: failures
+/// (no native handle yet, older Windows) leave the default caption.
+fn dark_title_bar(w: &MainWindow) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let handle = w.window().window_handle();
+    if let Ok(h) = handle.window_handle()
+        && let RawWindowHandle::Win32(h) = h.as_raw()
+    {
+        win::dark_caption(h.hwnd.get());
+    }
+}
+
 fn mode(dry: bool) -> RunMode {
     if dry { RunMode::DryRun } else { RunMode::Trim }
 }
@@ -271,6 +292,9 @@ fn open_window() {
         if let Some(w) = &a.window {
             let _ = w.show();
             w.window().set_minimized(false);
+            if created {
+                dark_title_bar(w);
+            }
         }
         created
     });

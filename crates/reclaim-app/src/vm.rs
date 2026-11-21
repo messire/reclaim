@@ -4,7 +4,7 @@
 
 use std::collections::BTreeSet;
 
-use reclaim_core::model::{Capabilities, ProcessKey, SystemSnapshot};
+use reclaim_core::model::{Capabilities, Pressure, ProcessKey, SystemSnapshot};
 use reclaim_core::outcome::{
     Completion, FailureKind, FollowUpPoint, ProcessOutcome, RunMode, RunRecord,
 };
@@ -13,7 +13,7 @@ use reclaim_core::report::Tone;
 use reclaim_core::units::{Bytes, Millis};
 use reclaim_engine::{Command, Event, Finished, Row, Settings, View};
 
-use crate::format::{date_time, opt_bytes, percent};
+use crate::format::{date_time, opt_bytes, percent, permille};
 use crate::strings::{pressure, tr, trf};
 
 /// Top-level screens.
@@ -173,6 +173,17 @@ impl Column {
             _ => Column::Status,
         }
     }
+
+    /// Table index of the column (inverse of [`Column::from_index`]).
+    pub fn index(self) -> usize {
+        match self {
+            Column::Name => 0,
+            Column::Pid => 1,
+            Column::WorkingSet => 2,
+            Column::PrivateBytes => 3,
+            Column::Status => 4,
+        }
+    }
 }
 
 /// Run progress as the UI sees it.
@@ -212,8 +223,14 @@ pub struct OverviewView {
     pub load: String,
     /// Commit charge of limit.
     pub committed: String,
+    /// Available share of installed memory, in per mille (0 when unknown).
+    pub available_permille: u16,
+    /// Commit charge share of the commit limit, in per mille (0 when unknown).
+    pub commit_permille: u16,
     /// Pressure word.
     pub pressure: String,
+    /// Whether memory pressure is high (shown in the warning colour).
+    pub pressure_high: bool,
     /// Standby list (details only).
     pub standby: String,
     /// Modified list (details only).
@@ -612,6 +629,11 @@ impl AppState {
             .map(|(p, _)| p.key)
     }
 
+    /// Current sort column and direction.
+    pub fn sort(&self) -> (Column, bool) {
+        self.sort
+    }
+
     /// Whether only eligible processes are listed.
     pub fn eligible_only(&self) -> bool {
         self.eligible_only
@@ -774,7 +796,10 @@ impl AppState {
                     "overview.committed",
                     &[("used", &s.commit_charge), ("limit", &s.commit_limit)],
                 );
+                v.available_permille = permille(s.phys_available, s.phys_total);
+                v.commit_permille = permille(s.commit_charge, s.commit_limit);
                 v.pressure = pressure(s.pressure).to_owned();
+                v.pressure_high = s.pressure == Pressure::High;
                 v.standby = opt_bytes(s.standby);
                 v.modified = opt_bytes(s.modified);
                 v.paging = s
