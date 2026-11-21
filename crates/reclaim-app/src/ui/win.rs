@@ -140,3 +140,43 @@ pub fn on_event(name: &str, f: impl FnOnce() + Send + 'static) {
         }
     });
 }
+
+/// Dark caption for the main window: immersive dark mode (Windows 10 20H1+ and 11), plus
+/// caption, border and title colours that match the window background (Windows 11 only;
+/// Windows 10 rejects those attributes and keeps its dark default). One-off calls per
+/// window, no per-frame cost.
+pub fn dark_caption(hwnd: isize) {
+    use windows_sys::Win32::Graphics::Dwm::{
+        DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
+        DwmSetWindowAttribute,
+    };
+    // COLORREF is 0x00BBGGRR.
+    const fn rgb(r: u32, g: u32, b: u32) -> u32 {
+        r | (g << 8) | (b << 16)
+    }
+    let hwnd = hwnd as windows_sys::Win32::Foundation::HWND;
+    let dark: i32 = 1;
+    let attrs: [(i32, u32); 3] = [
+        (DWMWA_CAPTION_COLOR, rgb(0x0b, 0x10, 0x13)),
+        (DWMWA_BORDER_COLOR, rgb(0x1b, 0x28, 0x30)),
+        (DWMWA_TEXT_COLOR, rgb(0x8a, 0x9d, 0xa5)),
+    ];
+    // SAFETY: `hwnd` is the live top-level window of this thread; each pointer refers to
+    // a local of the size passed, read synchronously by DWM.
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
+            (&raw const dark).cast(),
+            size_of::<i32>() as u32,
+        );
+        for (attr, color) in attrs {
+            DwmSetWindowAttribute(
+                hwnd,
+                attr as u32,
+                (&raw const color).cast(),
+                size_of::<u32>() as u32,
+            );
+        }
+    }
+}

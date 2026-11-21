@@ -3503,8 +3503,10 @@ dependencies = [
 
 [[package]]
 name = "reclaim-app"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
+ "png",
+ "raw-window-handle",
  "reclaim-core",
  "reclaim-engine",
  "reclaim-platform-fake",
@@ -3515,7 +3517,7 @@ dependencies = [
 
 [[package]]
 name = "reclaim-bench"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "reclaim-core",
  "reclaim-engine",
@@ -3526,7 +3528,7 @@ dependencies = [
 
 [[package]]
 name = "reclaim-cli"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "reclaim-core",
  "reclaim-engine",
@@ -3535,7 +3537,7 @@ dependencies = [
 
 [[package]]
 name = "reclaim-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "proptest",
  "serde",
@@ -3544,7 +3546,7 @@ dependencies = [
 
 [[package]]
 name = "reclaim-engine"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "reclaim-core",
  "reclaim-platform-fake",
@@ -3554,14 +3556,14 @@ dependencies = [
 
 [[package]]
 name = "reclaim-platform-fake"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "reclaim-core",
 ]
 
 [[package]]
 name = "reclaim-platform-windows"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "reclaim-core",
  "windows-sys 0.61.2",
@@ -3952,6 +3954,7 @@ dependencies = [
  "i-slint-renderer-software",
  "once_cell",
  "pin-weak",
+ "raw-window-handle",
  "slint-macros",
  "vtable",
 ]
@@ -4098,7 +4101,7 @@ dependencies = [
 
 [[package]]
 name = "spike-ui-slint"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "slint",
  "windows-sys 0.61.2",
@@ -4106,7 +4109,7 @@ dependencies = [
 
 [[package]]
 name = "spike-ui-win32"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "windows-sys 0.61.2",
 ]

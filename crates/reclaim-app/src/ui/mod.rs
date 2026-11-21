@@ -8,6 +8,7 @@
 //! - `--tray` starts without a window. A second launch shows the running instance.
 //! - DPI: winit makes the process Per-Monitor V2 aware before the first window.
 
+mod icons;
 mod view;
 mod win;
 
@@ -17,19 +18,20 @@ use std::time::Duration;
 
 use slint::{ComponentHandle, ModelRc, SharedString, StandardListViewItem, VecModel};
 
-use reclaim_app::vm::{AppState, Column, Dirty, Reaction, Screen, SettingsForm};
+use reclaim_app::vm::{AppState, Column, Dirty, Reaction, Screen, SettingsForm, TrayState};
 use reclaim_core::outcome::RunMode;
 use reclaim_core::report::Tone;
 use reclaim_engine::{Command, EngineHandle, Event, StdClock, Store, spawn};
 use reclaim_platform_windows::WindowsPlatform;
 
-use view::{MainWindow, ReportLine, Tray};
+use view::{MainWindow, ProcRow, ReportLine, Tray};
 
 struct App {
     state: AppState,
     engine: Option<EngineHandle>,
     window: Option<MainWindow>,
     tray: Tray,
+    tray_state: Option<TrayState>,
     settings_message: String,
     ready_event: Option<String>,
 }
@@ -93,6 +95,16 @@ impl App {
         if d.overview {
             self.tray.set_can_run(s.overview().can_run);
         }
+        if d.tray || d.overview || d.result {
+            let state = s.tray_state();
+            // Decode and hand Windows a new icon only when the state really changes.
+            if self.tray_state != Some(state)
+                && let Some(icon) = icons::tray(state)
+            {
+                self.tray.set_tray_icon(icon);
+                self.tray_state = Some(state);
+            }
+        }
         let Some(w) = &self.window else {
             return;
         };
@@ -108,6 +120,9 @@ impl App {
             w.set_total(o.total.into());
             w.set_load(o.load.into());
             w.set_committed(o.committed.into());
+            w.set_available_permille(i32::from(o.available_permille));
+            w.set_commit_permille(i32::from(o.commit_permille));
+            w.set_pressure_high(o.pressure_high);
             w.set_pressure(o.pressure.into());
             w.set_standby(o.standby.into());
             w.set_modified(o.modified.into());
@@ -122,16 +137,22 @@ impl App {
             w.set_selected_count(s.selected_count() as i32);
             // A recreated window starts unchecked: restore the filter it shows.
             w.set_eligible_only(s.eligible_only());
-            w.set_rows(table(rows.into_iter().map(|r| {
-                vec![
-                    if r.selected { "✓" } else { "" }.to_owned(),
-                    r.name,
-                    r.pid,
-                    r.working_set,
-                    r.private_bytes,
-                    r.status,
-                ]
-            })));
+            let (col, asc) = s.sort();
+            w.set_sort_column(col.index() as i32 + 1);
+            w.set_sort_ascending(asc);
+            let rows: Vec<ProcRow> = rows
+                .into_iter()
+                .map(|r| ProcRow {
+                    selected: r.selected,
+                    name: r.name.into(),
+                    pid: r.pid.into(),
+                    working_set: r.working_set.into(),
+                    private_bytes: r.private_bytes.into(),
+                    status: r.status.into(),
+                    eligible: r.eligible,
+                })
+                .collect();
+            w.set_rows(ModelRc::new(VecModel::from(rows)));
         }
         if d.plan {
             match s.plan() {
@@ -198,6 +219,9 @@ impl App {
 fn build() -> Option<MainWindow> {
     let w = MainWindow::new().ok()?;
     w.set_version(reclaim_core::VERSION.into());
+    if let Some(icon) = icons::app() {
+        w.set_app_icon(icon);
+    }
     w.on_navigate(|i| act(|s| s.show(Screen::from_index(i.max(0) as usize))));
     w.on_dismiss_warning(|| act_dirty(AppState::dismiss_warning));
     w.on_run(|dry| act(|s| s.request_run(mode(dry), false)));
@@ -254,6 +278,32 @@ fn build() -> Option<MainWindow> {
     Some(w)
 }
 
+/// Asks DWM for a dark caption that matches the window background. The native window is
+/// created lazily by the event loop, so `show()` alone does not give a handle yet: retry on
+/// later loop turns (up to ~1 s). Cosmetic: failures leave the default caption.
+fn dark_title_bar(attempt: u32) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let applied = with(|a| {
+        let w = a.window.as_ref()?;
+        let handle = w.window().window_handle();
+        let h = handle.window_handle().ok()?;
+        match h.as_raw() {
+            RawWindowHandle::Win32(h) => {
+                win::dark_caption(h.hwnd.get());
+                Some(())
+            }
+            _ => None,
+        }
+    })
+    .flatten()
+    .is_some();
+    if !applied && attempt < 40 {
+        slint::Timer::single_shot(Duration::from_millis(25), move || {
+            dark_title_bar(attempt + 1);
+        });
+    }
+}
+
 fn mode(dry: bool) -> RunMode {
     if dry { RunMode::DryRun } else { RunMode::Trim }
 }
@@ -275,6 +325,7 @@ fn open_window() {
         created
     });
     if created == Some(true) {
+        slint::Timer::single_shot(Duration::ZERO, || dark_title_bar(0));
         arm_ready_marker();
     }
 }
@@ -353,7 +404,9 @@ pub fn run() -> i32 {
             return 1;
         }
     };
-    tray.set_tray_icon(tray_icon());
+    // Replaced by the state icon on the first refresh; the drawn icon is the fallback
+    // if a bundled PNG ever fails to decode.
+    tray.set_tray_icon(icons::tray(TrayState::Unavailable).unwrap_or_else(tray_icon));
     tray.set_tip(reclaim_app::strings::tr("tray.tooltip").into());
     tray.on_open(open_window);
     tray.on_run(|| {
@@ -400,6 +453,7 @@ pub fn run() -> i32 {
             engine: Some(engine),
             window: None,
             tray,
+            tray_state: Some(TrayState::Unavailable),
             settings_message: String::new(),
             ready_event: arg_value(&args, "--ready-event"),
         });
@@ -436,7 +490,8 @@ pub fn run() -> i32 {
     code
 }
 
-/// 32×32 RGBA tray icon drawn in code: a ring with a downward bar (no asset, no decoder).
+/// 32×32 RGBA tray icon drawn in code: a cyan ring with a downward bar, in the window's
+/// accent colour (no asset, no decoder).
 fn tray_icon() -> slint::Image {
     const N: u32 = 32;
     let mut buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(N, N);
@@ -447,9 +502,9 @@ fn tray_icon() -> slint::Image {
         let bar = x.abs() <= 2 && (-7..=7).contains(&y);
         *px = if ring || bar {
             slint::Rgba8Pixel {
-                r: 0x1f,
-                g: 0x7a,
-                b: 0xd6,
+                r: 0x3f,
+                g: 0xe3,
+                b: 0xf2,
                 a: 0xff,
             }
         } else {
