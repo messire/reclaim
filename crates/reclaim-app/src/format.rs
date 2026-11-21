@@ -20,6 +20,16 @@ pub fn percent(part: Bytes, whole: Bytes) -> u64 {
     }
 }
 
+/// `part` of `whole` in per mille, clamped to 0..=1000 (0 when `whole` is zero). Drives
+/// the overview bars.
+pub fn permille(part: Bytes, whole: Bytes) -> u16 {
+    if whole.get() == 0 {
+        0
+    } else {
+        (u128::from(part.get()) * 1000 / u128::from(whole.get())).min(1000) as u16
+    }
+}
+
 /// `YYYY-MM-DD HH:MM` for a wall time (ms since the Unix epoch) shifted by the local
 /// UTC offset in minutes.
 pub fn date_time(wall: Millis, utc_offset_min: i32) -> String {
@@ -51,6 +61,13 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn permille_clamps() {
+        assert_eq!(permille(Bytes(1), Bytes(0)), 0);
+        assert_eq!(permille(Bytes(1), Bytes(3)), 333);
+        assert_eq!(permille(Bytes(5), Bytes(4)), 1000);
+    }
 
     #[test]
     fn dates() {

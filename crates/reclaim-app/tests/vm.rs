@@ -3,7 +3,7 @@
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 
-use reclaim_app::vm::{AppState, Column, Reaction, Screen, SettingsForm, Stage};
+use reclaim_app::vm::{AppState, Column, Reaction, Screen, SettingsForm, Stage, TrayState};
 use reclaim_core::model::{AccessHint, Pressure, SystemSnapshot};
 use reclaim_core::outcome::RunMode;
 use reclaim_core::units::Bytes;
@@ -157,11 +157,13 @@ fn unconfirmed_dry_run_completes_and_reaches_history() {
     assert!(r.s.request_run(RunMode::Trim, false).commands.is_empty());
     r.send(req);
     r.until(|e| matches!(e, Event::RunCompleted(_)));
+    assert_eq!(r.s.tray_state(), TrayState::Working, "follow-up pending");
     assert!(r.s.plan().is_none(), "no dialog when confirmation is off");
     assert_eq!(r.s.screen, Screen::Result);
     r.f.advance(61_000);
     r.h.send(Command::RefreshNow);
     r.until(|e| matches!(e, Event::RunFinalized(_)));
+    assert_ne!(r.s.tray_state(), TrayState::Working);
     let res = r.s.result();
     assert_eq!(res.status, "Follow-up complete.");
     assert!(res.lines[0].1.starts_with("Dry run"));
@@ -213,6 +215,7 @@ fn overview_and_tray_follow_samples() {
     let mut s = AppState::new(180);
     assert_eq!(s.overview().available, "not available");
     assert_eq!(s.tray_tooltip(), "Reclaim");
+    assert_eq!(s.tray_state(), TrayState::Unavailable, "no sample yet");
     let snap = SystemSnapshot {
         phys_total: Bytes::from_mib(8192),
         phys_available: Bytes::from_mib(2048),
@@ -230,6 +233,17 @@ fn overview_and_tray_follow_samples() {
     assert_eq!(o.pressure, "normal");
     assert_eq!(o.standby, "not available");
     assert_eq!(s.tray_tooltip(), "Reclaim: 2.0 GiB available");
+    assert_eq!((o.available_permille, o.commit_permille), (250, 500));
+    assert!(!o.pressure_high);
+    assert_eq!(s.tray_state(), TrayState::Normal);
+    let high = SystemSnapshot {
+        pressure: Pressure::High,
+        ..snap
+    };
+    s.apply(Event::SystemSample(high));
+    assert!(s.overview().pressure_high);
+    assert_eq!(s.tray_state(), TrayState::High);
+    s.apply(Event::SystemSample(snap));
     assert!(
         !s.apply(Event::SystemSample(snap)).dirty.any(),
         "unchanged sample redraws nothing"
