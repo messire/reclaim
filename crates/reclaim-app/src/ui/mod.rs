@@ -263,15 +263,29 @@ fn build() -> Option<MainWindow> {
     Some(w)
 }
 
-/// Asks DWM for a dark caption that matches the window background. Cosmetic: failures
-/// (no native handle yet, older Windows) leave the default caption.
-fn dark_title_bar(w: &MainWindow) {
+/// Asks DWM for a dark caption that matches the window background. The native window is
+/// created lazily by the event loop, so `show()` alone does not give a handle yet: retry on
+/// later loop turns (up to ~1 s). Cosmetic: failures leave the default caption.
+fn dark_title_bar(attempt: u32) {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    let handle = w.window().window_handle();
-    if let Ok(h) = handle.window_handle()
-        && let RawWindowHandle::Win32(h) = h.as_raw()
-    {
-        win::dark_caption(h.hwnd.get());
+    let applied = with(|a| {
+        let w = a.window.as_ref()?;
+        let handle = w.window().window_handle();
+        let h = handle.window_handle().ok()?;
+        match h.as_raw() {
+            RawWindowHandle::Win32(h) => {
+                win::dark_caption(h.hwnd.get());
+                Some(())
+            }
+            _ => None,
+        }
+    })
+    .flatten()
+    .is_some();
+    if !applied && attempt < 40 {
+        slint::Timer::single_shot(Duration::from_millis(25), move || {
+            dark_title_bar(attempt + 1);
+        });
     }
 }
 
@@ -292,13 +306,11 @@ fn open_window() {
         if let Some(w) = &a.window {
             let _ = w.show();
             w.window().set_minimized(false);
-            if created {
-                dark_title_bar(w);
-            }
         }
         created
     });
     if created == Some(true) {
+        slint::Timer::single_shot(Duration::ZERO, || dark_title_bar(0));
         arm_ready_marker();
     }
 }
