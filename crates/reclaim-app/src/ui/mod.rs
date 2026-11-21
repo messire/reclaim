@@ -460,7 +460,8 @@ pub fn run() -> i32 {
     code
 }
 
-/// 32×32 RGBA tray icon drawn in code: a ring with a downward bar (no asset, no decoder).
+/// 32×32 RGBA tray icon drawn in code: a cyan ring with a downward bar, in the window's
+/// accent colour (no asset, no decoder).
 fn tray_icon() -> slint::Image {
     const N: u32 = 32;
     let mut buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(N, N);
@@ -471,9 +472,9 @@ fn tray_icon() -> slint::Image {
         let bar = x.abs() <= 2 && (-7..=7).contains(&y);
         *px = if ring || bar {
             slint::Rgba8Pixel {
-                r: 0x1f,
-                g: 0x7a,
-                b: 0xd6,
+                r: 0x3f,
+                g: 0xe3,
+                b: 0xf2,
                 a: 0xff,
             }
         } else {
