@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — memory MVP (Windows)
+## [0.1.0] — memory MVP (Windows)
 - Core domain and fake platform for tests (line coverage ≥ 90 %).
 - Windows adapter: system memory, per-process working set and private bytes, trim eligibility with reasons.
 - Engine and CLI: `status`, `list`, `plan`, `trim` with dry run, confirmation and JSON output.
