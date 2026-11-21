@@ -239,6 +239,8 @@ slint::slint! {
         background: Theme.bg;
         default-font-family: "Consolas";
         default-font-size: 13px;
+        in property <image> app-icon;
+        icon: root.app-icon;
 
         init => {
             Palette.color-scheme = ColorScheme.dark;

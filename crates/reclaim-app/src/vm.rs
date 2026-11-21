@@ -186,6 +186,20 @@ impl Column {
     }
 }
 
+/// What the tray icon shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TrayState {
+    /// Normal or low memory pressure.
+    #[default]
+    Normal,
+    /// The OS low-memory signal is set.
+    High,
+    /// A run or its follow-up measurement is in progress.
+    Working,
+    /// Trimming is not supported, or no memory sample yet.
+    Unavailable,
+}
+
 /// Run progress as the UI sees it.
 #[derive(Debug, Clone, Default)]
 pub enum Stage {
@@ -996,6 +1010,19 @@ impl AppState {
     /// The settings form for the settings in effect.
     pub fn settings_form(&self) -> SettingsForm {
         SettingsForm::of(&self.settings)
+    }
+
+    /// Tray icon state.
+    pub fn tray_state(&self) -> TrayState {
+        if matches!(self.stage, Stage::Running { .. } | Stage::FollowUp { .. }) {
+            return TrayState::Working;
+        }
+        match &self.system {
+            _ if !self.trim_supported() => TrayState::Unavailable,
+            None => TrayState::Unavailable,
+            Some(s) if s.pressure == Pressure::High => TrayState::High,
+            Some(_) => TrayState::Normal,
+        }
     }
 
     /// Tray tooltip.

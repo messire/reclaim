@@ -3505,6 +3505,7 @@ dependencies = [
 name = "reclaim-app"
 version = "0.0.0"
 dependencies = [
+ "png",
  "raw-window-handle",
  "reclaim-core",
  "reclaim-engine",

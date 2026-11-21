@@ -8,6 +8,7 @@
 //! - `--tray` starts without a window. A second launch shows the running instance.
 //! - DPI: winit makes the process Per-Monitor V2 aware before the first window.
 
+mod icons;
 mod view;
 mod win;
 
@@ -17,7 +18,7 @@ use std::time::Duration;
 
 use slint::{ComponentHandle, ModelRc, SharedString, StandardListViewItem, VecModel};
 
-use reclaim_app::vm::{AppState, Column, Dirty, Reaction, Screen, SettingsForm};
+use reclaim_app::vm::{AppState, Column, Dirty, Reaction, Screen, SettingsForm, TrayState};
 use reclaim_core::outcome::RunMode;
 use reclaim_core::report::Tone;
 use reclaim_engine::{Command, EngineHandle, Event, StdClock, Store, spawn};
@@ -30,6 +31,7 @@ struct App {
     engine: Option<EngineHandle>,
     window: Option<MainWindow>,
     tray: Tray,
+    tray_state: Option<TrayState>,
     settings_message: String,
     ready_event: Option<String>,
 }
@@ -92,6 +94,16 @@ impl App {
         }
         if d.overview {
             self.tray.set_can_run(s.overview().can_run);
+        }
+        if d.tray || d.overview || d.result {
+            let state = s.tray_state();
+            // Decode and hand Windows a new icon only when the state really changes.
+            if self.tray_state != Some(state)
+                && let Some(icon) = icons::tray(state)
+            {
+                self.tray.set_tray_icon(icon);
+                self.tray_state = Some(state);
+            }
         }
         let Some(w) = &self.window else {
             return;
@@ -207,6 +219,9 @@ impl App {
 fn build() -> Option<MainWindow> {
     let w = MainWindow::new().ok()?;
     w.set_version(reclaim_core::VERSION.into());
+    if let Some(icon) = icons::app() {
+        w.set_app_icon(icon);
+    }
     w.on_navigate(|i| act(|s| s.show(Screen::from_index(i.max(0) as usize))));
     w.on_dismiss_warning(|| act_dirty(AppState::dismiss_warning));
     w.on_run(|dry| act(|s| s.request_run(mode(dry), false)));
@@ -389,7 +404,9 @@ pub fn run() -> i32 {
             return 1;
         }
     };
-    tray.set_tray_icon(tray_icon());
+    // Replaced by the state icon on the first refresh; the drawn icon is the fallback
+    // if a bundled PNG ever fails to decode.
+    tray.set_tray_icon(icons::tray(TrayState::Unavailable).unwrap_or_else(tray_icon));
     tray.set_tip(reclaim_app::strings::tr("tray.tooltip").into());
     tray.on_open(open_window);
     tray.on_run(|| {
@@ -436,6 +453,7 @@ pub fn run() -> i32 {
             engine: Some(engine),
             window: None,
             tray,
+            tray_state: Some(TrayState::Unavailable),
             settings_message: String::new(),
             ready_event: arg_value(&args, "--ready-event"),
         });

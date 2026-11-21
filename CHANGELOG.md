@@ -7,6 +7,7 @@
 - Result report immediately, after 10 s and 60 s: reduced working set, rebound, page faults, commit change.
 - Slint desktop UI, tray mode, single instance.
 - Dark monospace window style: memory bars on the overview, custom process table, dark title bar.
+- App icon in the exe and window; tray icon shows the state (normal, high pressure, working, unavailable).
 - Benchmark harness: probes, scenarios S1–S8, soak test, CI smoke run.
 - Tag-driven release workflow: zip, `SHA256SUMS`, third-party notices.
 - MIT license.
