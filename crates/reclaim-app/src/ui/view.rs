@@ -345,6 +345,7 @@ slint::slint! {
         in-out property <bool> s-confirm;
         in-out property <bool> s-history;
         in-out property <bool> s-log;
+        in-out property <bool> s-autostart;
         in property <string> settings-message;
         in property <string> version;
         callback save-settings();
@@ -632,6 +633,8 @@ slint::slint! {
                     CheckBox { text: @tr("Ask before every run"); checked <=> root.s-confirm; }
                     CheckBox { text: @tr("Keep run history on this computer"); checked <=> root.s-history; }
                     CheckBox { text: @tr("Write errors to a local log file"); checked <=> root.s-log; }
+                    CheckBox { text: @tr("Start Reclaim with Windows (in the tray)"); checked <=> root.s-autostart; }
+                    Text { text: @tr("Changes take effect when you press Save."); color: Theme.dim; font-size: 11px; }
                     HorizontalLayout {
                         alignment: start;
                         spacing: 10px;

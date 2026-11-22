@@ -2,7 +2,7 @@
 
 Run on a clean VirtualBox VM for each of Windows 10 22H2 and Windows 11 23H2+:
 - as a **standard user** (the owner works elevated, so this matrix is only covered here);
-- with the release zip from the Release workflow, not a local build.
+- with the release zip or installer from the Release workflow, not a local build.
 
 Record the build, VM, date and the result of each line (✓, ✗ with a note, or n/a). Each line names the ACCEPTANCE item it gives evidence for.
 
@@ -54,3 +54,13 @@ Record the build, VM, date and the result of each line (✓, ✗ with a note, or
 | 22 | Inspect `%LOCALAPPDATA%\Reclaim` | `settings.toml`, `history.jsonl`; no log unless enabled; no paths beyond image names | §1.10, §4.6 |
 | 23 | Settings → Clear history and logs | Files removed; status bar says "No run yet." | §4.6 |
 | 24 | Corrupt `settings.toml` (type garbage) and start | Defaults used, a warning is shown, the file is kept as `settings.toml.bad` | §4.2 |
+
+## Installer and start with Windows
+
+| # | Step | Expected | ACC |
+|---|---|---|---|
+| 25 | Run `reclaim-<version>-windows-x64-setup.exe` as a standard user, pick a folder, tick *Start Reclaim with Windows* | No UAC prompt; files in the chosen folder; Start menu entry; Reclaim starts in the tray after sign-out and sign-in | — |
+| 26 | Settings: untick *Start Reclaim with Windows*, close the window (X) without saving, open it again from the tray | Box is ticked again: nothing changes until Save (Revert also restores it) | — |
+| 27 | Untick it and press Save | "Settings saved."; Task Manager → Startup apps no longer lists Reclaim | — |
+| 28 | Run a newer setup while Reclaim runs | Folder page shows the installed folder; Reclaim is closed and replaced; Settings → Apps lists one Reclaim with the new version | — |
+| 29 | Uninstall from Settings → Apps | Files, shortcut and the start-with-Windows entry are gone; `%LOCALAPPDATA%\Reclaim` is kept | — |

@@ -104,6 +104,34 @@ jobs:
           $deps
           if ($deps -match 'VCRUNTIME|MSVCP|api-ms-win-crt') { throw "reclaim.exe depends on the VC++ runtime" }
 
+  installer:
+    name: Installer (build, install, upgrade, move, uninstall)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Build installer (the documented command)
+        shell: cmd
+        run: scripts\build-installer.cmd -NoInstallTools
+      - name: Build a second setup with a higher version (upgrade test)
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          $stage = (Get-ChildItem target/installer -Directory | Select-Object -First 1).FullName
+          & $iscc /Q /DAppVersion=99.0.0 "/DStageDir=$stage" "/DOutputDir=$PWD\dist-next" installer\reclaim.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+      - name: Install, upgrade in place, move, uninstall
+        shell: pwsh
+        run: scripts/test-installer.ps1 -Setup (Get-Item dist/*-setup.exe).FullName -NextSetup (Get-Item dist-next/*-setup.exe).FullName
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reclaim-installer
+          path: |
+            dist/
+            installer-test-*.log
+
   bench-smoke:
     name: Benchmark smoke (M5, probes only)
     runs-on: windows-latest

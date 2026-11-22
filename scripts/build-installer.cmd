@@ -1,0 +1,12 @@
+@echo off
+rem Builds the Reclaim installer and portable zip into dist\ (in the repository folder).
+rem Run it from anywhere, or double-click it in Explorer. See installer\README.md.
+rem Arguments are passed on, e.g. "scripts\build-installer.cmd -Run".
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0build-installer.ps1" %*
+set RC=%ERRORLEVEL%
+rem Started by a double-click (cmd /c, not in CI): keep the window open to read the result.
+if defined CI goto done
+echo "%CMDCMDLINE%" | find /i "/c" >nul
+if not errorlevel 1 pause
+:done
+exit /b %RC%
