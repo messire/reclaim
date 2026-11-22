@@ -25,7 +25,7 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 - Shows system memory: available and installed physical memory, committed memory against the commit limit, and memory pressure. Optional details add the standby and modified lists and the paging rate.
 - Lists processes with their working set, private bytes, and whether they can be trimmed.
   - If a process can't be trimmed, the list says why: a system process, protected by default, in the foreground, needs administrator rights, excluded by you, or below the size threshold.
-- On your request only, after a confirmation, trims the working sets of eligible processes (`SetProcessWorkingSetSize(-1, -1)`). A dry run measures the same steps without trimming, as a control.
+- On your request only, after a confirmation, trims the working sets of eligible processes (`SetProcessWorkingSetSize(-1, -1)`). A dry run (CLI only) measures the same steps without trimming, as a control.
 - Reports what changed, immediately and 10 s and 60 s later:
   - the working set reduced, and how much came back (rebound);
   - page faults and the paging rate;
@@ -39,7 +39,7 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 
 ## Privacy
 
-Reclaim works offline and has no account, telemetry or network access. Settings and run history stay in `%LOCALAPPDATA%\Reclaim` (`settings.toml`, `history.jsonl`). Only image names are stored, never paths or command lines. An error log is off by default. History → *Clear history and logs* deletes them.
+Reclaim works offline and has no account, telemetry or network access. Settings and run history stay in `%LOCALAPPDATA%\Reclaim` (`settings.toml`, `history.jsonl`). Only image names are stored, never paths or command lines. An error log is off by default. Settings → *Clear history and logs* deletes them.
 
 ## Using it
 

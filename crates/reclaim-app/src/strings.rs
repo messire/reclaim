@@ -25,15 +25,8 @@ pub const EN: &[(&str, &str)] = &[
     ("value.unknown", "not available"),
     ("overview.committed", "{used} of {limit}"),
     ("overview.load", "{percent} % in use"),
-    ("overview.never", "No run yet."),
-    (
-        "overview.last_run",
-        "Last run {when}: {trimmed} processes trimmed, working set reduced by {amount}.",
-    ),
-    (
-        "overview.last_dry_run",
-        "Last dry run {when}: {targets} processes would have been trimmed.",
-    ),
+    ("status.never", "No run yet."),
+    ("status.summary", "{trimmed} trimmed · {amount}"),
     (
         "plan.title",
         "Trim the working sets of {count} processes ({amount} in total)?",

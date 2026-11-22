@@ -10,15 +10,8 @@
 slint::slint! {
     #[edition = "1.19"]
     import {
-        CheckBox, LineEdit, TextEdit, StandardTableView, StandardListView, ListView,
-        ScrollView, Palette, AboutSlint,
+        CheckBox, LineEdit, TextEdit, ListView, Palette, AboutSlint,
     } from "std-widgets.slint";
-
-    export struct ReportLine {
-        // 0 info, 1 warning, 2 cost, 3 note.
-        tone: int,
-        text: string,
-    }
 
     export struct ProcRow {
         selected: bool,
@@ -45,6 +38,8 @@ slint::slint! {
         out property <color> warn: #e0a458;
         out property <color> error: #f0766e;
         out property <color> hover: #ffffff0a;
+        // Memory-in-use bar: teal while there is room, amber, then red near full.
+        out property <brush> usage: @linear-gradient(90deg, #1fa3b3 0%, #3fe3f2 40%, #e0a458 75%, #f0766e 100%);
         out property <length> cell: 28px;
         out property <length> spacing: 1.5px;
         // Process table column widths (name and status stretch).
@@ -103,17 +98,24 @@ slint::slint! {
         vertical-alignment: center;
     }
 
-    // Flat progress bar; `permille` is 0..1000.
+    // Flat progress bar; `permille` is 0..1000. The fill brush spans the whole track and
+    // is clipped to the filled part, so a gradient shows the colour of the current level.
     component Bar inherits Rectangle {
         in property <int> permille;
-        in property <color> fill: Theme.accent;
+        in property <brush> fill: Theme.accent;
         height: 14px;
         background: Theme.track;
         Rectangle {
             x: 0;
             width: parent.width * clamp(root.permille, 0, 1000) / 1000;
             height: parent.height;
-            background: root.fill;
+            clip: true;
+            Rectangle {
+                x: 0;
+                width: root.width;
+                height: parent.height;
+                background: root.fill;
+            }
         }
     }
 
@@ -203,6 +205,44 @@ slint::slint! {
         }
     }
 
+    // Square icon button on the right of the tab row (Settings, About). The icon is a
+    // stroked 24×24 path, so it needs no font glyph and no image asset.
+    component IconTab {
+        in property <string> commands;
+        in property <bool> active;
+        in property <string> tip;
+        callback clicked();
+        width: 36px;
+        height: 36px;
+        horizontal-stretch: 0;
+        vertical-stretch: 0;
+        accessible-role: button;
+        accessible-label: root.tip;
+        Path {
+            x: (parent.width - 18px) / 2;
+            y: (parent.height - 18px) / 2;
+            width: 18px;
+            height: 18px;
+            viewbox-width: 24;
+            viewbox-height: 24;
+            commands: root.commands;
+            fill: transparent;
+            stroke: root.active ? Theme.accent : touch.has-hover ? Theme.text : Theme.muted;
+            stroke-width: 1.5px;
+        }
+        if root.active : Rectangle {
+            x: 6px;
+            y: root.height - 2px;
+            width: root.width - 12px;
+            height: 2px;
+            background: Theme.accent;
+        }
+        touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.clicked(); }
+        }
+    }
+
     // Sortable header cell of the process table.
     component HeadCell {
         in property <string> text;
@@ -255,22 +295,21 @@ slint::slint! {
         callback dismiss-warning();
 
         // Overview.
-        in property <string> available;
+        in property <string> used;
         in property <string> total;
         in property <string> load;
         in property <string> committed;
-        in property <int> available-permille;
+        in property <int> used-permille;
         in property <int> commit-permille;
         in property <string> pressure;
         in property <bool> pressure-high;
         in property <string> standby;
         in property <string> modified;
         in property <string> paging;
-        in property <string> last-run;
         in property <bool> can-run: true;
         in property <bool> trim-supported: true;
         in-out property <bool> details: false;
-        callback run(bool);
+        callback run();
         callback toggle-details(bool);
 
         // Processes. Table column 0 is the selection mark; data columns start at 1.
@@ -282,7 +321,7 @@ slint::slint! {
         callback sort(int, bool);
         callback toggle-row(int);
         callback set-eligible-only(bool);
-        callback run-selected(bool);
+        callback run-selected();
 
         // Confirmation.
         in property <bool> plan-open;
@@ -293,16 +332,10 @@ slint::slint! {
         callback confirm();
         callback dismiss();
 
-        // Result.
-        in property <string> result-status;
-        in property <[ReportLine]> result-lines;
-        in property <[[StandardListViewItem]]> result-rows;
-        in property <bool> result-can-cancel;
-        in property <float> result-progress;
+        // Status bar: run progress or the last trim's totals.
+        in property <string> status;
+        in property <bool> can-cancel;
         callback cancel-run();
-
-        // History.
-        in property <[StandardListViewItem]> history;
         callback clear-history();
 
         // Settings.
@@ -317,10 +350,8 @@ slint::slint! {
         callback save-settings();
         callback revert-settings();
 
-        private property <[string]> tabs: [
-            @tr("Overview"), @tr("Processes"), @tr("Result"), @tr("History"),
-            @tr("Settings"), @tr("About"),
-        ];
+        // Text tabs on the left; Settings (2) and About (3) are icons on the right.
+        private property <[string]> tabs: [@tr("Overview"), @tr("Processes")];
 
         // Sorting from a header click: a new column starts in its natural order.
         function header-clicked(column: int) {
@@ -331,353 +362,352 @@ slint::slint! {
             }
         }
 
+        function go(i: int) {
+            root.page = i;
+            root.navigate(i);
+        }
+
         GridBackground {}
 
         VerticalLayout {
-            padding: 16px;
-            padding-top: 4px;
-            spacing: 14px;
-
-            // Tab strip.
+            spacing: 0;
             VerticalLayout {
-                spacing: 0;
-                HorizontalLayout {
-                    alignment: start;
-                    spacing: 0;
-                    for t[i] in root.tabs : TabItem {
-                        text: t;
-                        active: root.page == i;
-                        clicked => {
-                            root.page = i;
-                            root.navigate(i);
-                        }
-                    }
-                }
-                Rule {}
-            }
-
-            if root.warning != "" : Rectangle {
-                background: #241c10;
-                border-width: 1px;
-                border-color: Theme.warn;
-                border-radius: 4px;
-                HorizontalLayout {
-                    padding: 8px;
-                    padding-left: 12px;
-                    spacing: 12px;
-                    Text {
-                        text: root.warning;
-                        color: Theme.warn;
-                        vertical-alignment: center;
-                        wrap: word-wrap;
-                        horizontal-stretch: 1;
-                    }
-                    FlatButton { text: @tr("Dismiss"); clicked => { root.dismiss-warning(); } }
-                }
-            }
-
-            // Overview.
-            if root.page == 0 : VerticalLayout {
-                alignment: start;
+                padding: 16px;
+                padding-top: 4px;
                 spacing: 14px;
-                Panel {
-                    VerticalLayout {
-                        padding: 20px;
-                        spacing: 12px;
-                        HorizontalLayout {
-                            Caption { label: @tr("Available"); }
-                            Bracket { value: @tr("{} of {}", root.available, root.total); }
-                        }
-                        Bar { permille: root.available-permille; fill: Theme.accent; }
-                        Rectangle { height: 6px; }
-                        HorizontalLayout {
-                            Caption { label: @tr("Commit"); }
-                            Bracket { value: root.committed; }
-                        }
-                        Bar { permille: root.commit-permille; fill: Theme.accent-dim; }
-                        Rectangle { height: 4px; }
-                        Rule {}
-                        Value { label: @tr("Physical memory"); value: root.load; }
-                        Value {
-                            label: @tr("Memory pressure");
-                            value: root.pressure;
-                            value-color: root.pressure-high ? Theme.warn : Theme.text;
-                        }
-                    }
-                }
-                CheckBox {
-                    text: @tr("Show memory details (standby, modified, paging)");
-                    checked <=> root.details;
-                    toggled => { root.toggle-details(self.checked); }
-                }
-                if root.details : Panel {
-                    VerticalLayout {
-                        padding: 20px;
-                        padding-top: 14px;
-                        padding-bottom: 14px;
-                        spacing: 10px;
-                        Value { label: @tr("Standby list"); value: root.standby; }
-                        Value { label: @tr("Modified list"); value: root.modified; }
-                        Value { label: @tr("Pages read from disk"); value: root.paging; }
-                    }
-                }
-                Text { text: root.last-run; wrap: word-wrap; color: Theme.muted; }
-                if !root.trim-supported : Text {
-                    text: @tr("Trimming is not available on this system.");
-                    color: Theme.error;
-                }
-                HorizontalLayout {
-                    alignment: start;
-                    spacing: 10px;
-                    FlatButton {
-                        text: @tr("Trim working sets…");
-                        primary: true;
-                        enabled: root.can-run;
-                        clicked => { root.run(false); }
-                    }
-                    FlatButton {
-                        text: @tr("Dry run…");
-                        enabled: root.can-run;
-                        clicked => { root.run(true); }
-                    }
-                }
-            }
+                vertical-stretch: 1;
 
-            // Processes.
-            if root.page == 1 : VerticalLayout {
-                spacing: 12px;
-                HorizontalLayout {
+                // Tab strip.
+                VerticalLayout {
+                    spacing: 0;
+                    HorizontalLayout {
+                        spacing: 0;
+                        for t[i] in root.tabs : TabItem {
+                            text: t;
+                            active: root.page == i;
+                            clicked => { root.go(i); }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        IconTab {
+                            tip: @tr("Settings");
+                            active: root.page == 2;
+                            commands: "M 19.27 9.78 L 21.78 9.92 L 21.78 14.08 L 19.27 14.22 L 18.71 15.57 L 20.39 17.45 L 17.45 20.39 L 15.57 18.71 L 14.22 19.27 L 14.08 21.78 L 9.92 21.78 L 9.78 19.27 L 8.43 18.71 L 6.55 20.39 L 3.61 17.45 L 5.29 15.57 L 4.73 14.22 L 2.22 14.08 L 2.22 9.92 L 4.73 9.78 L 5.29 8.43 L 3.61 6.55 L 6.55 3.61 L 8.43 5.29 L 9.78 4.73 L 9.92 2.22 L 14.08 2.22 L 14.22 4.73 L 15.57 5.29 L 17.45 3.61 L 20.39 6.55 L 18.71 8.43 Z M 15.2 12 A 3.2 3.2 0 1 1 8.8 12 A 3.2 3.2 0 1 1 15.2 12 Z";
+                            clicked => { root.go(2); }
+                        }
+                        // About is always the rightmost icon.
+                        IconTab {
+                            tip: @tr("About");
+                            active: root.page == 3;
+                            commands: "M 21.5 12 A 9.5 9.5 0 1 1 2.5 12 A 9.5 9.5 0 1 1 21.5 12 Z M 12 10.5 L 12 17 M 12 7 L 12 8";
+                            clicked => { root.go(3); }
+                        }
+                    }
+                    Rule {}
+                }
+
+                if root.warning != "" : Rectangle {
+                    background: #241c10;
+                    border-width: 1px;
+                    border-color: Theme.warn;
+                    border-radius: 4px;
+                    HorizontalLayout {
+                        padding: 8px;
+                        padding-left: 12px;
+                        spacing: 12px;
+                        Text {
+                            text: root.warning;
+                            color: Theme.warn;
+                            vertical-alignment: center;
+                            wrap: word-wrap;
+                            horizontal-stretch: 1;
+                        }
+                        FlatButton { text: @tr("Dismiss"); clicked => { root.dismiss-warning(); } }
+                    }
+                }
+
+                // Overview.
+                if root.page == 0 : VerticalLayout {
                     alignment: start;
                     spacing: 14px;
-                    CheckBox {
-                        text: @tr("Eligible only");
-                        checked <=> root.eligible-only;
-                        toggled => { root.set-eligible-only(self.checked); }
-                    }
-                    FlatButton {
-                        text: @tr("Trim selected ({})…", root.selected-count);
-                        primary: true;
-                        enabled: root.can-run && root.selected-count > 0;
-                        clicked => { root.run-selected(false); }
-                    }
-                    Text {
-                        text: @tr("Click a row to select it.");
-                        color: Theme.dim;
-                        vertical-alignment: center;
-                    }
-                }
-                Panel {
-                    vertical-stretch: 1;
-                    VerticalLayout {
-                        padding-left: 14px;
-                        padding-right: 14px;
-                        padding-bottom: 4px;
-                        HorizontalLayout {
+                    Panel {
+                        VerticalLayout {
+                            padding: 20px;
                             spacing: 12px;
-                            Rectangle { width: Theme.col-mark; }
-                            HeadCell {
-                                text: @tr("Process"); column: 1; horizontal-stretch: 1; preferred-width: 0;
-                                sorted: root.sort-column; ascending: root.sort-ascending;
-                                clicked => { root.header-clicked(1); }
+                            HorizontalLayout {
+                                Caption { label: @tr("Used"); }
+                                Bracket { value: @tr("{} of {}", root.used, root.total); }
                             }
-                            HeadCell {
-                                text: @tr("PID"); column: 2; width: Theme.col-pid;
-                                sorted: root.sort-column; ascending: root.sort-ascending;
-                                clicked => { root.header-clicked(2); }
+                            Bar { permille: root.used-permille; fill: Theme.usage; }
+                            Rectangle { height: 6px; }
+                            HorizontalLayout {
+                                Caption { label: @tr("Commit"); }
+                                Bracket { value: root.committed; }
                             }
-                            HeadCell {
-                                text: @tr("Working set"); column: 3; width: Theme.col-bytes;
-                                sorted: root.sort-column; ascending: root.sort-ascending;
-                                clicked => { root.header-clicked(3); }
-                            }
-                            HeadCell {
-                                text: @tr("Private bytes"); column: 4; width: Theme.col-bytes;
-                                sorted: root.sort-column; ascending: root.sort-ascending;
-                                clicked => { root.header-clicked(4); }
-                            }
-                            HeadCell {
-                                text: @tr("Trim?"); column: 5; horizontal-stretch: 1; preferred-width: 0;
-                                sorted: root.sort-column; ascending: root.sort-ascending;
-                                clicked => { root.header-clicked(5); }
-                            }
-                        }
-                        Rule {}
-                        ListView {
-                            vertical-stretch: 1;
-                            for r[i] in root.rows : Rectangle {
-                                height: 34px;
-                                background: row-touch.has-hover ? Theme.hover : transparent;
-                                HorizontalLayout {
-                                    spacing: 12px;
-                                    Text {
-                                        width: Theme.col-mark;
-                                        text: r.selected ? "✓" : "";
-                                        color: Theme.accent;
-                                        vertical-alignment: center;
-                                    }
-                                    Text {
-                                        horizontal-stretch: 1;
-                                        preferred-width: 0;
-                                        text: r.name;
-                                        color: r.selected ? Theme.accent : Theme.text;
-                                        vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-                                    Text {
-                                        width: Theme.col-pid;
-                                        text: r.pid;
-                                        color: Theme.muted;
-                                        vertical-alignment: center;
-                                    }
-                                    Text {
-                                        width: Theme.col-bytes;
-                                        text: "[ " + r.working-set + " ]";
-                                        color: Theme.text;
-                                        vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-                                    Text {
-                                        width: Theme.col-bytes;
-                                        text: r.private-bytes;
-                                        color: Theme.muted;
-                                        vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-                                    Text {
-                                        horizontal-stretch: 1;
-                                        preferred-width: 0;
-                                        text: r.eligible ? @tr("yes") : r.status;
-                                        color: r.eligible ? Theme.accent : Theme.muted;
-                                        font-weight: r.eligible ? 700 : 400;
-                                        vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-                                }
-                                Rectangle {
-                                    y: parent.height - 1px;
-                                    height: 1px;
-                                    background: Theme.line;
-                                }
-                                row-touch := TouchArea {
-                                    mouse-cursor: pointer;
-                                    clicked => { root.toggle-row(i); }
-                                }
+                            Bar { permille: root.commit-permille; fill: Theme.accent-dim; }
+                            Rectangle { height: 4px; }
+                            Rule {}
+                            Value { label: @tr("Physical memory"); value: root.load; }
+                            Value {
+                                label: @tr("Memory pressure");
+                                value: root.pressure;
+                                value-color: root.pressure-high ? Theme.warn : Theme.text;
                             }
                         }
                     }
-                }
-            }
-
-            // Result.
-            if root.page == 2 : VerticalLayout {
-                spacing: 12px;
-                HorizontalLayout {
-                    spacing: 12px;
-                    Text {
-                        text: root.result-status;
-                        color: Theme.text;
-                        vertical-alignment: center;
-                        horizontal-stretch: 1;
+                    CheckBox {
+                        text: @tr("Show memory details (standby, modified, paging)");
+                        checked <=> root.details;
+                        toggled => { root.toggle-details(self.checked); }
                     }
-                    if root.result-can-cancel : FlatButton {
-                        text: @tr("Cancel");
-                        clicked => { root.cancel-run(); }
+                    if root.details : Panel {
+                        VerticalLayout {
+                            padding: 20px;
+                            padding-top: 14px;
+                            padding-bottom: 14px;
+                            spacing: 10px;
+                            Value { label: @tr("Standby list"); value: root.standby; }
+                            Value { label: @tr("Modified list"); value: root.modified; }
+                            Value { label: @tr("Pages read from disk"); value: root.paging; }
+                        }
                     }
-                }
-                if root.result-progress < 1.0 : Bar {
-                    permille: root.result-progress * 1000;
-                    fill: Theme.accent;
-                }
-                if root.result-lines.length == 0 && root.result-status == "" : Text {
-                    text: @tr("Run a trim or a dry run to see its result here.");
-                    color: Theme.muted;
-                }
-                ScrollView {
-                    vertical-stretch: 1;
-                    VerticalLayout {
+                    if !root.trim-supported : Text {
+                        text: @tr("Trimming is not available on this system.");
+                        color: Theme.error;
+                    }
+                    HorizontalLayout {
                         alignment: start;
-                        spacing: 6px;
-                        for line in root.result-lines : Text {
-                            text: line.text;
-                            wrap: word-wrap;
-                            color: line.tone == 1 ? Theme.error
-                                : line.tone == 2 ? Theme.amber
-                                : line.tone == 3 ? Theme.dim
-                                : Theme.text;
+                        spacing: 10px;
+                        FlatButton {
+                            text: @tr("Trim working sets…");
+                            primary: true;
+                            enabled: root.can-run;
+                            clicked => { root.run(); }
                         }
                     }
                 }
-                StandardTableView {
-                    vertical-stretch: 1;
-                    columns: [{ title: @tr("Process") }, { title: @tr("Outcome") }];
-                    rows: root.result-rows;
-                }
-            }
 
-            // History.
-            if root.page == 3 : VerticalLayout {
-                spacing: 12px;
-                StandardListView { model: root.history; }
-                HorizontalLayout {
-                    alignment: start;
-                    FlatButton {
-                        text: @tr("Clear history and logs");
-                        clicked => { root.clear-history(); }
-                    }
-                }
-            }
-
-            // Settings.
-            if root.page == 4 : VerticalLayout {
-                alignment: start;
-                spacing: 10px;
-                HorizontalLayout {
+                // Processes.
+                if root.page == 1 : VerticalLayout {
                     spacing: 12px;
-                    Text {
-                        text: @tr("Skip processes smaller than (MiB)");
-                        color: Theme.muted;
-                        vertical-alignment: center;
-                        horizontal-stretch: 0;
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 14px;
+                        CheckBox {
+                            text: @tr("Eligible only");
+                            checked <=> root.eligible-only;
+                            toggled => { root.set-eligible-only(self.checked); }
+                        }
+                        FlatButton {
+                            text: @tr("Trim selected ({})…", root.selected-count);
+                            primary: true;
+                            enabled: root.can-run && root.selected-count > 0;
+                            clicked => { root.run-selected(); }
+                        }
+                        Text {
+                            text: @tr("Click a row to select it.");
+                            color: Theme.dim;
+                            vertical-alignment: center;
+                        }
                     }
-                    LineEdit { text <=> root.s-threshold; input-type: number; max-width: 120px; }
+                    Panel {
+                        vertical-stretch: 1;
+                        VerticalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            padding-bottom: 4px;
+                            HorizontalLayout {
+                                spacing: 12px;
+                                Rectangle { width: Theme.col-mark; }
+                                HeadCell {
+                                    text: @tr("Process"); column: 1; horizontal-stretch: 1; preferred-width: 0;
+                                    sorted: root.sort-column; ascending: root.sort-ascending;
+                                    clicked => { root.header-clicked(1); }
+                                }
+                                HeadCell {
+                                    text: @tr("PID"); column: 2; width: Theme.col-pid;
+                                    sorted: root.sort-column; ascending: root.sort-ascending;
+                                    clicked => { root.header-clicked(2); }
+                                }
+                                HeadCell {
+                                    text: @tr("Working set"); column: 3; width: Theme.col-bytes;
+                                    sorted: root.sort-column; ascending: root.sort-ascending;
+                                    clicked => { root.header-clicked(3); }
+                                }
+                                HeadCell {
+                                    text: @tr("Private bytes"); column: 4; width: Theme.col-bytes;
+                                    sorted: root.sort-column; ascending: root.sort-ascending;
+                                    clicked => { root.header-clicked(4); }
+                                }
+                                HeadCell {
+                                    text: @tr("Trim?"); column: 5; horizontal-stretch: 1; preferred-width: 0;
+                                    sorted: root.sort-column; ascending: root.sort-ascending;
+                                    clicked => { root.header-clicked(5); }
+                                }
+                            }
+                            Rule {}
+                            ListView {
+                                vertical-stretch: 1;
+                                for r[i] in root.rows : Rectangle {
+                                    height: 34px;
+                                    background: row-touch.has-hover ? Theme.hover : transparent;
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        Text {
+                                            width: Theme.col-mark;
+                                            text: r.selected ? "✓" : "";
+                                            color: Theme.accent;
+                                            vertical-alignment: center;
+                                        }
+                                        Text {
+                                            horizontal-stretch: 1;
+                                            preferred-width: 0;
+                                            text: r.name;
+                                            color: r.selected ? Theme.accent : Theme.text;
+                                            vertical-alignment: center;
+                                            overflow: elide;
+                                        }
+                                        Text {
+                                            width: Theme.col-pid;
+                                            text: r.pid;
+                                            color: Theme.muted;
+                                            vertical-alignment: center;
+                                        }
+                                        Text {
+                                            width: Theme.col-bytes;
+                                            text: "[ " + r.working-set + " ]";
+                                            color: Theme.text;
+                                            vertical-alignment: center;
+                                            overflow: elide;
+                                        }
+                                        Text {
+                                            width: Theme.col-bytes;
+                                            text: r.private-bytes;
+                                            color: Theme.muted;
+                                            vertical-alignment: center;
+                                            overflow: elide;
+                                        }
+                                        Text {
+                                            horizontal-stretch: 1;
+                                            preferred-width: 0;
+                                            text: r.eligible ? @tr("yes") : r.status;
+                                            color: r.eligible ? Theme.accent : Theme.muted;
+                                            font-weight: r.eligible ? 700 : 400;
+                                            vertical-alignment: center;
+                                            overflow: elide;
+                                        }
+                                    }
+                                    Rectangle {
+                                        y: parent.height - 1px;
+                                        height: 1px;
+                                        background: Theme.line;
+                                    }
+                                    row-touch := TouchArea {
+                                        mouse-cursor: pointer;
+                                        clicked => { root.toggle-row(i); }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-                Text { text: @tr("Never trim (one image name per line, for example game.exe)"); color: Theme.muted; }
-                TextEdit { text <=> root.s-exclusions; min-height: 70px; }
-                Text { text: @tr("Allow protected images (one per line)"); color: Theme.muted; }
-                TextEdit { text <=> root.s-caution; min-height: 50px; }
-                CheckBox { text: @tr("Ask before every run"); checked <=> root.s-confirm; }
-                CheckBox { text: @tr("Keep run history on this computer"); checked <=> root.s-history; }
-                CheckBox { text: @tr("Write errors to a local log file"); checked <=> root.s-log; }
-                HorizontalLayout {
+
+                // Settings.
+                if root.page == 2 : VerticalLayout {
                     alignment: start;
                     spacing: 10px;
-                    FlatButton { text: @tr("Save"); primary: true; clicked => { root.save-settings(); } }
-                    FlatButton { text: @tr("Revert"); clicked => { root.revert-settings(); } }
-                    Text { text: root.settings-message; color: Theme.muted; vertical-alignment: center; }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Text {
+                            text: @tr("Skip processes smaller than (MiB)");
+                            color: Theme.muted;
+                            vertical-alignment: center;
+                            horizontal-stretch: 0;
+                        }
+                        LineEdit { text <=> root.s-threshold; input-type: number; max-width: 120px; }
+                    }
+                    Text { text: @tr("Never trim (one image name per line, for example game.exe)"); color: Theme.muted; }
+                    TextEdit { text <=> root.s-exclusions; min-height: 70px; }
+                    Text { text: @tr("Allow protected images (one per line)"); color: Theme.muted; }
+                    TextEdit { text <=> root.s-caution; min-height: 50px; }
+                    CheckBox { text: @tr("Ask before every run"); checked <=> root.s-confirm; }
+                    CheckBox { text: @tr("Keep run history on this computer"); checked <=> root.s-history; }
+                    CheckBox { text: @tr("Write errors to a local log file"); checked <=> root.s-log; }
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 10px;
+                        FlatButton { text: @tr("Save"); primary: true; clicked => { root.save-settings(); } }
+                        FlatButton { text: @tr("Revert"); clicked => { root.revert-settings(); } }
+                        FlatButton { text: @tr("Clear history and logs"); clicked => { root.clear-history(); } }
+                        Text { text: root.settings-message; color: Theme.muted; vertical-alignment: center; }
+                    }
+                }
+
+                // About.
+                if root.page == 3 : VerticalLayout {
+                    alignment: start;
+                    spacing: 10px;
+                    Text {
+                        text: @tr("Reclaim {}", root.version).to-uppercase();
+                        color: Theme.accent;
+                        letter-spacing: Theme.spacing;
+                    }
+                    Text {
+                        text: @tr("Trims the working sets of eligible processes on request and reports what changed, including what did not. Nothing leaves this computer.");
+                        color: Theme.text;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: @tr("Licensed under the MIT license. Third-party notices are in THIRD_PARTY_NOTICES.");
+                        color: Theme.muted;
+                        wrap: word-wrap;
+                    }
+                    Rectangle { height: 8px; }
+                    Rule {}
+                    Text {
+                        text: @tr("The window is drawn with Slint, a third-party UI toolkit used under its royalty-free license.");
+                        color: Theme.dim;
+                        font-size: 11px;
+                        wrap: word-wrap;
+                    }
+                    // Attribution required by the Slint Royalty-free License 2.0, §2(a): the
+                    // AboutSlint widget on the About screen (ADR-0001). Kept small on purpose.
+                    HorizontalLayout {
+                        alignment: start;
+                        AboutSlint { width: 150px; height: 104px; }
+                    }
                 }
             }
 
-            // About.
-            if root.page == 5 : VerticalLayout {
-                alignment: start;
-                spacing: 10px;
-                Text {
-                    text: @tr("Reclaim {}", root.version).to-uppercase();
-                    color: Theme.accent;
-                    letter-spacing: Theme.spacing;
+            // Status bar.
+            Rectangle {
+                height: 28px;
+                vertical-stretch: 0;
+                background: Theme.panel;
+                Rule { y: 0; width: parent.width; }
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    spacing: 12px;
+                    Text {
+                        text: root.status;
+                        font-size: 12px;
+                        color: Theme.muted;
+                        vertical-alignment: center;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                    }
+                    if root.can-cancel : Text {
+                        text: @tr("Cancel").to-uppercase();
+                        font-size: 12px;
+                        letter-spacing: 1px;
+                        color: cancel-touch.has-hover ? Theme.text : Theme.accent;
+                        vertical-alignment: center;
+                        cancel-touch := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.cancel-run(); }
+                        }
+                    }
                 }
-                Text {
-                    text: @tr("Trims the working sets of eligible processes on request and reports what changed, including what did not. Nothing leaves this computer.");
-                    color: Theme.text;
-                    wrap: word-wrap;
-                }
-                Text {
-                    text: @tr("Licensed under the MIT license. Third-party notices are in THIRD_PARTY_NOTICES.");
-                    color: Theme.muted;
-                    wrap: word-wrap;
-                }
-                // Attribution required by the Slint Royalty-free License 2.0 (ADR-0001).
-                AboutSlint { max-height: 220px; }
             }
         }
 
