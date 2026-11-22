@@ -25,7 +25,14 @@ $dirB = Join-Path $base "B"
 $step = 0
 
 function Check($ok, $what) {
-    if (-not $ok) { throw "FAILED: $what" }
+    if (-not $ok) {
+        Write-Host "--- Run key:"
+        Get-ItemProperty -Path $runKey -ErrorAction SilentlyContinue | Format-List | Out-String | Write-Host
+        $last = Get-ChildItem (Join-Path $PWD "installer-test-*.log") -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime | Select-Object -Last 1
+        if ($last) { Write-Host "--- $($last.Name):"; Get-Content $last | Write-Host }
+        throw "FAILED: $what"
+    }
     Write-Host "  ok: $what"
 }
 
