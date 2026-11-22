@@ -3530,6 +3530,10 @@ dependencies = [
  "reclaim-engine",
  "reclaim-platform-fake",
  "reclaim-platform-windows",
+ "reclaim-storage-core",
+ "reclaim-storage-engine",
+ "reclaim-storage-windows",
+ "serde_json",
  "slint",
  "windows-sys 0.61.2",
 ]
@@ -3611,6 +3615,11 @@ dependencies = [
 [[package]]
 name = "reclaim-storage-windows"
 version = "0.2.0"
+dependencies = [
+ "reclaim-storage-core",
+ "reclaim-storage-engine",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "redox_syscall"

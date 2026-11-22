@@ -10,7 +10,7 @@
 slint::slint! {
     #[edition = "1.19"]
     import {
-        CheckBox, LineEdit, TextEdit, ListView, Palette, AboutSlint,
+        CheckBox, LineEdit, TextEdit, ListView, Palette, AboutSlint, ComboBox,
     } from "std-widgets.slint";
 
     export struct ProcRow {
@@ -21,6 +21,76 @@ slint::slint! {
         private-bytes: string,
         status: string,
         eligible: bool,
+    }
+
+    export struct DriveItem {
+        root: string,
+        title: string,
+        detail: string,
+        used: int,
+    }
+
+    export struct TreeRow {
+        id: int,
+        depth: int,
+        name: string,
+        size: string,
+        share: int,
+        parent-pct: string,
+        files: string,
+        modified: string,
+        expandable: bool,
+        expanded: bool,
+        selected: bool,
+        flags: string,
+        more: bool,
+        color: color,
+    }
+
+    export struct Tile {
+        x: float,
+        y: float,
+        w: float,
+        h: float,
+        color: color,
+        leaf: bool,
+    }
+
+    export struct ListRow {
+        id: int,
+        name: string,
+        detail: string,
+        size: string,
+        extra: string,
+        color: color,
+    }
+
+    export struct CatRow {
+        id: string,
+        name: string,
+        safety: string,
+        level: int,
+        size: string,
+        files: string,
+        selected: bool,
+        enabled: bool,
+        focused: bool,
+    }
+
+    export struct CandRow {
+        path: string,
+        size: string,
+        modified: string,
+        selected: bool,
+    }
+
+    export struct DupRow {
+        group: int,
+        file: int,
+        text: string,
+        size: string,
+        marked: bool,
+        header: bool,
     }
 
     global Theme {
@@ -270,12 +340,286 @@ slint::slint! {
         }
     }
 
+    // Small text link (inline action).
+    component Link inherits Text {
+        in property <bool> enabled: true;
+        callback clicked();
+        font-size: 12px;
+        letter-spacing: 1px;
+        color: !root.enabled ? Theme.dim : link-touch.has-hover ? Theme.text : Theme.accent;
+        vertical-alignment: center;
+        link-touch := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            clicked => { root.clicked(); }
+        }
+    }
+
+    // Directory tree with size bars; virtualised by ListView. `scroll-serial` changes
+    // whenever the selection moves, so the selected row is scrolled into view.
+    component TreeView inherits Panel {
+        in property <[TreeRow]> rows;
+        in property <int> scroll-to: -1;
+        in property <int> scroll-serial;
+        callback select(int);
+        callback toggle(int);
+        callback more(int);
+        callback zoom(int);
+        private property <length> row-h: 24px;
+
+        changed scroll-serial => {
+            if (root.scroll-to >= 0) {
+                if (root.scroll-to * root.row-h < -list.content-y
+                    || (root.scroll-to + 1) * root.row-h > -list.content-y + list.visible-height) {
+                    list.content-y = min(0px, -(root.scroll-to * root.row-h - list.visible-height / 2));
+                }
+            }
+        }
+
+        VerticalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            padding-bottom: 4px;
+            HorizontalLayout {
+                spacing: 8px;
+                min-height: 30px;
+                max-height: 30px;
+                Caption { label: @tr("Name"); font-size: 11px; horizontal-stretch: 1; }
+                Caption { label: @tr("Size"); font-size: 11px; width: 160px; }
+                Caption { label: @tr("Parent"); font-size: 11px; width: 52px; }
+                Caption { label: @tr("Files"); font-size: 11px; width: 64px; }
+            }
+            Rule {}
+            list := ListView {
+                vertical-stretch: 1;
+                for r in root.rows : Rectangle {
+                    height: root.row-h;
+                    background: r.selected ? #3fe3f224 : row-touch.has-hover ? Theme.hover : transparent;
+                    row-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => {
+                            if (r.more) {
+                                root.more(r.id);
+                            } else {
+                                root.select(r.id);
+                            }
+                        }
+                        double-clicked => {
+                            if (!r.more) {
+                                root.zoom(r.id);
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        padding-left: r.depth * 14px;
+                        spacing: 6px;
+                        Text {
+                            width: 14px;
+                            text: r.expandable ? (r.expanded ? "▾" : "▸") : "";
+                            color: Theme.muted;
+                            vertical-alignment: center;
+                            horizontal-alignment: center;
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { root.toggle(r.id); }
+                            }
+                        }
+                        Rectangle {
+                            width: 8px;
+                            Rectangle {
+                                width: 8px;
+                                height: 8px;
+                                background: r.color;
+                            }
+                        }
+                        Text {
+                            horizontal-stretch: 1;
+                            preferred-width: 0;
+                            text: r.flags == "" ? r.name : r.name + "  · " + r.flags;
+                            color: r.more ? Theme.dim : r.selected ? Theme.accent : Theme.text;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        Rectangle {
+                            width: 70px;
+                            Rectangle {
+                                x: 0;
+                                width: parent.width;
+                                height: 6px;
+                                background: Theme.track;
+                                Rectangle {
+                                    x: 0;
+                                    width: parent.width * clamp(r.share, 0, 1000) / 1000;
+                                    background: Theme.accent-dim;
+                                }
+                            }
+                        }
+                        Text {
+                            width: 84px;
+                            text: r.size;
+                            color: Theme.amber;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            width: 52px;
+                            text: r.parent-pct;
+                            color: Theme.muted;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            width: 64px;
+                            text: r.files;
+                            color: Theme.dim;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Treemap or icicle. Tiles come in map coordinates (logical pixels of this area);
+    // one TouchArea does hover, click and double-click for all of them.
+    component MapView inherits Rectangle {
+        in property <[Tile]> tiles;
+        in property <bool> has-sel;
+        in property <float> sel-x;
+        in property <float> sel-y;
+        in property <float> sel-w;
+        in property <float> sel-h;
+        callback resized(float, float);
+        pure callback hover(float, float) -> string;
+        callback click(float, float);
+        callback zoom(float, float);
+        private property <string> tip;
+
+        background: Theme.track;
+        clip: true;
+        init => { root.resized(self.width / 1px, self.height / 1px); }
+        changed width => { root.resized(self.width / 1px, self.height / 1px); }
+        changed height => { root.resized(self.width / 1px, self.height / 1px); }
+
+        for t in root.tiles : Rectangle {
+            x: t.x * 1px;
+            y: t.y * 1px;
+            width: t.w * 1px;
+            height: t.h * 1px;
+            background: t.leaf ? t.color : transparent;
+            border-width: t.leaf ? (t.w > 4 && t.h > 4 ? 1px : 0px) : 1px;
+            border-color: t.leaf ? #0B101399 : #0B1013;
+        }
+        if root.has-sel : Rectangle {
+            x: root.sel-x * 1px;
+            y: root.sel-y * 1px;
+            width: max(2px, root.sel-w * 1px);
+            height: max(2px, root.sel-h * 1px);
+            border-width: 2px;
+            border-color: #ffffff;
+        }
+        touch := TouchArea {
+            changed mouse-x => { root.tip = self.has-hover ? root.hover(self.mouse-x / 1px, self.mouse-y / 1px) : ""; }
+            changed mouse-y => { root.tip = self.has-hover ? root.hover(self.mouse-x / 1px, self.mouse-y / 1px) : ""; }
+            changed has-hover => {
+                if (!self.has-hover) {
+                    root.tip = "";
+                }
+            }
+            clicked => { root.click(self.mouse-x / 1px, self.mouse-y / 1px); }
+            double-clicked => { root.zoom(self.mouse-x / 1px, self.mouse-y / 1px); }
+        }
+        if root.tip != "" : Rectangle {
+            x: min(touch.mouse-x + 14px, max(0px, root.width - self.width - 4px));
+            y: touch.mouse-y + 18px + self.height > root.height
+                ? max(0px, touch.mouse-y - self.height - 8px)
+                : touch.mouse-y + 18px;
+            width: min(tip-text.preferred-width + 16px, 420px);
+            height: tip-text.preferred-height + 10px;
+            background: #0B1013ee;
+            border-width: 1px;
+            border-color: Theme.accent-dim;
+            border-radius: 3px;
+            tip-text := Text {
+                x: 8px;
+                y: 5px;
+                width: parent.width - 16px;
+                text: root.tip;
+                font-size: 12px;
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+        }
+    }
+
+    // Bottom result list of the analyzer.
+    component ResultList inherits Panel {
+        in property <[ListRow]> rows;
+        in property <int> sorted: -1;
+        in property <bool> ascending;
+        in property <bool> sortable: true;
+        callback sort(int, bool);
+        callback select(int);
+
+        function header(column: int) {
+            if (!root.sortable) {
+                return;
+            }
+            if (column == root.sorted) {
+                root.sort(column, !root.ascending);
+            } else {
+                root.sort(column, column == 1 || column == 2);
+            }
+        }
+
+        VerticalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            HorizontalLayout {
+                spacing: 8px;
+                HeadCell { text: "·"; column: 2; width: 16px; sorted: root.sorted; ascending: root.ascending; clicked => { root.header(2); } }
+                HeadCell { text: @tr("Name"); column: 1; width: 200px; sorted: root.sorted; ascending: root.ascending; clicked => { root.header(1); } }
+                HeadCell { text: @tr("Location"); column: 1; horizontal-stretch: 1; preferred-width: 0; sorted: -1; ascending: false; clicked => { root.header(1); } }
+                HeadCell { text: @tr("Size"); column: 0; width: 90px; sorted: root.sorted; ascending: root.ascending; clicked => { root.header(0); } }
+                HeadCell { text: @tr("Modified"); column: 3; width: 130px; sorted: root.sorted; ascending: root.ascending; clicked => { root.header(3); } }
+            }
+            Rule {}
+            ListView {
+                vertical-stretch: 1;
+                for r in root.rows : Rectangle {
+                    height: 24px;
+                    background: list-touch.has-hover ? Theme.hover : transparent;
+                    list-touch := TouchArea {
+                        mouse-cursor: r.id >= 0 ? MouseCursor.pointer : MouseCursor.default;
+                        clicked => {
+                            if (r.id >= 0) {
+                                root.select(r.id);
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Rectangle {
+                            width: 16px;
+                            Rectangle { width: 8px; height: 8px; background: r.color; }
+                        }
+                        Text { width: 200px; text: r.name; color: Theme.text; vertical-alignment: center; overflow: elide; }
+                        Text { horizontal-stretch: 1; preferred-width: 0; text: r.detail; color: Theme.muted; vertical-alignment: center; overflow: elide; }
+                        Text { width: 90px; text: r.size; color: Theme.amber; horizontal-alignment: right; vertical-alignment: center; }
+                        Text { width: 130px; text: r.extra; color: Theme.dim; horizontal-alignment: right; vertical-alignment: center; }
+                    }
+                }
+            }
+        }
+    }
+
     export component MainWindow inherits Window {
         title: @tr("Reclaim");
-        preferred-width: 820px;
-        preferred-height: 600px;
-        min-width: 600px;
-        min-height: 440px;
+        preferred-width: 1120px;
+        preferred-height: 780px;
+        min-width: 720px;
+        min-height: 520px;
         background: Theme.bg;
         default-font-family: "Consolas";
         default-font-size: 13px;
@@ -351,8 +695,135 @@ slint::slint! {
         callback save-settings();
         callback revert-settings();
 
-        // Text tabs on the left; Settings (2) and About (3) are icons on the right.
-        private property <[string]> tabs: [@tr("Overview"), @tr("Processes")];
+        // Storage: disk usage (page 4).
+        in property <[string]> st-drive-titles;
+        in property <[DriveItem]> st-drives;
+        in-out property <int> st-drive-index: 0;
+        in-out property <string> st-folders;
+        in property <string> st-status;
+        in property <bool> st-scanning;
+        in property <bool> st-paused;
+        in property <bool> st-can-pause;
+        in property <bool> st-has-index;
+        in property <bool> st-partial;
+        in-out property <bool> st-watch;
+        in property <[TreeRow]> st-tree;
+        in property <int> st-tree-scroll: -1;
+        in property <int> st-tree-serial;
+        in property <[Tile]> st-tiles;
+        in property <bool> st-has-sel;
+        in property <float> st-sel-x;
+        in property <float> st-sel-y;
+        in property <float> st-sel-w;
+        in property <float> st-sel-h;
+        in property <string> st-sel-path;
+        in property <string> st-sel-detail;
+        in property <bool> st-can-recycle;
+        in property <bool> st-can-refresh;
+        in property <string> st-zoom-path;
+        in property <bool> st-can-back;
+        in property <bool> st-can-forward;
+        in property <bool> st-can-up;
+        in property <bool> st-icicle;
+        in property <int> st-tab;
+        in property <[ListRow]> st-list;
+        in property <int> st-list-sort;
+        in property <bool> st-list-asc;
+        in property <string> st-search-message;
+        in-out property <string> st-q-name;
+        in-out property <string> st-q-path;
+        in-out property <string> st-q-ext;
+        in-out property <string> st-q-min;
+        in-out property <string> st-q-max;
+        in-out property <string> st-q-older;
+        in-out property <string> st-q-newer;
+        in-out property <int> st-q-kind;
+        callback st-scan-drive(int);
+        callback st-scan-folders();
+        callback st-browse();
+        callback st-pause(bool);
+        callback st-cancel();
+        callback st-refresh();
+        callback st-export(bool);
+        callback st-set-watch(bool);
+        callback st-select(int);
+        callback st-toggle(int);
+        callback st-more(int);
+        callback st-zoom-node(int);
+        callback st-map-resized(float, float);
+        pure callback st-map-hover(float, float) -> string;
+        callback st-map-click(float, float);
+        callback st-map-zoom(float, float);
+        callback st-back();
+        callback st-forward();
+        callback st-up();
+        callback st-set-icicle(bool);
+        callback st-open-explorer();
+        callback st-properties();
+        callback st-recycle();
+        callback st-set-tab(int);
+        callback st-sort(int, bool);
+        callback st-search();
+        callback st-clear-search();
+
+        // Storage: cleanup (page 5).
+        in property <[CatRow]> cl-categories;
+        in property <string> cl-detail;
+        in property <[CandRow]> cl-candidates;
+        in property <bool> cl-per-file;
+        in property <string> cl-status;
+        in property <bool> cl-busy;
+        in property <int> cl-progress;
+        in property <bool> cl-can-clean;
+        in property <string> cl-report;
+        in property <[string]> cl-history;
+        callback cl-examine();
+        callback cl-clean();
+        callback cl-cancel();
+        callback cl-toggle(string);
+        callback cl-focus(string);
+        callback cl-toggle-file(int);
+        callback cl-clear-history();
+
+        // Storage: duplicates (page 6).
+        in property <[DupRow]> du-rows;
+        in property <string> du-status;
+        in property <bool> du-busy;
+        in property <int> du-progress;
+        in property <bool> du-can-find;
+        in property <bool> du-can-recycle;
+        callback du-find();
+        callback du-cancel();
+        callback du-toggle(int, int);
+        callback du-open(int, int);
+        callback du-recycle();
+
+        // Storage confirmation.
+        in property <bool> sc-open;
+        in property <string> sc-title;
+        in property <string> sc-body;
+        in property <string> sc-ok;
+        in property <bool> sc-danger;
+        callback sc-confirm();
+        callback sc-dismiss();
+
+        // Storage settings.
+        in-out property <string> ss-scan-excl;
+        in-out property <string> ss-clean-excl;
+        in-out property <string> ss-threads;
+        in-out property <bool> ss-fast;
+        in-out property <bool> ss-allocated;
+        in-out property <string> ss-dup-min;
+        in-out property <bool> ss-history;
+        in property <bool> ss-fast-available;
+        in property <string> ss-message;
+        callback ss-save();
+        callback ss-revert();
+
+        // Text tabs on the left (page numbers in `tab-pages`); Settings (2) and About (3)
+        // are icons on the right.
+        private property <[string]> tabs: [@tr("Overview"), @tr("Processes"), @tr("Disk usage"), @tr("Cleanup"), @tr("Duplicates")];
+        private property <[int]> tab-pages: [0, 1, 4, 5, 6];
 
         // Sorting from a header click: a new column starts in its natural order.
         function header-clicked(column: int) {
@@ -385,8 +856,8 @@ slint::slint! {
                         spacing: 0;
                         for t[i] in root.tabs : TabItem {
                             text: t;
-                            active: root.page == i;
-                            clicked => { root.go(i); }
+                            active: root.page == root.tab-pages[i];
+                            clicked => { root.go(root.tab-pages[i]); }
                         }
                         Rectangle { horizontal-stretch: 1; }
                         IconTab {
@@ -612,10 +1083,14 @@ slint::slint! {
                     }
                 }
 
-                // Settings.
-                if root.page == 2 : VerticalLayout {
+                // Settings: memory on the left, storage on the right.
+                if root.page == 2 : HorizontalLayout {
+                  spacing: 24px;
+                  VerticalLayout {
                     alignment: start;
                     spacing: 10px;
+                    horizontal-stretch: 1;
+                    Caption { label: @tr("Memory"); font-size: 12px; }
                     HorizontalLayout {
                         spacing: 12px;
                         Text {
@@ -642,6 +1117,384 @@ slint::slint! {
                         FlatButton { text: @tr("Revert"); clicked => { root.revert-settings(); } }
                         FlatButton { text: @tr("Clear history and logs"); clicked => { root.clear-history(); } }
                         Text { text: root.settings-message; color: Theme.muted; vertical-alignment: center; }
+                    }
+                  }
+                  VerticalLayout {
+                    alignment: start;
+                    spacing: 10px;
+                    horizontal-stretch: 1;
+                    Caption { label: @tr("Storage"); font-size: 12px; }
+                    Text { text: @tr("Never scan (paths or names such as node_modules, one per line)"); color: Theme.muted; wrap: word-wrap; }
+                    TextEdit { text <=> root.ss-scan-excl; min-height: 60px; }
+                    Text { text: @tr("Never clean (paths or names, one per line)"); color: Theme.muted; wrap: word-wrap; }
+                    TextEdit { text <=> root.ss-clean-excl; min-height: 50px; }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Text { text: @tr("Scan threads (0 = automatic per drive)"); color: Theme.muted; vertical-alignment: center; }
+                        LineEdit { text <=> root.ss-threads; input-type: number; max-width: 80px; }
+                    }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Text { text: @tr("Duplicates: ignore files smaller than (KiB)"); color: Theme.muted; vertical-alignment: center; }
+                        LineEdit { text <=> root.ss-dup-min; input-type: number; max-width: 100px; }
+                    }
+                    CheckBox { text: @tr("Show sizes on disk (otherwise file lengths)"); checked <=> root.ss-allocated; }
+                    CheckBox { text: @tr("Fast NTFS scan of whole drives"); checked <=> root.ss-fast; }
+                    Text {
+                        text: root.ss-fast-available
+                            ? @tr("Available: Reclaim is running as administrator.")
+                            : @tr("Used only when you start Reclaim as administrator yourself; Reclaim never asks for elevation. Otherwise drives are scanned folder by folder.");
+                        color: Theme.dim;
+                        font-size: 11px;
+                        wrap: word-wrap;
+                    }
+                    CheckBox { text: @tr("Keep cleanup history on this computer (no file names)"); checked <=> root.ss-history; }
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 10px;
+                        FlatButton { text: @tr("Save"); primary: true; clicked => { root.ss-save(); } }
+                        FlatButton { text: @tr("Revert"); clicked => { root.ss-revert(); } }
+                        Text { text: root.ss-message; color: Theme.muted; vertical-alignment: center; wrap: word-wrap; }
+                    }
+                  }
+                }
+
+                // Disk usage.
+                if root.page == 4 : VerticalLayout {
+                    spacing: 8px;
+                    HorizontalLayout {
+                        spacing: 10px;
+                        ComboBox {
+                            model: root.st-drive-titles;
+                            current-index <=> root.st-drive-index;
+                            min-width: 260px;
+                            horizontal-stretch: 0;
+                            enabled: !root.st-scanning;
+                        }
+                        FlatButton {
+                            text: @tr("Scan drive");
+                            primary: true;
+                            enabled: !root.st-scanning && root.st-drive-titles.length > 0;
+                            clicked => { root.st-scan-drive(root.st-drive-index); }
+                        }
+                        LineEdit {
+                            text <=> root.st-folders;
+                            placeholder-text: @tr("Folders to scan, separated by ;");
+                            horizontal-stretch: 1;
+                            enabled: !root.st-scanning;
+                            accepted => { root.st-scan-folders(); }
+                        }
+                        FlatButton { text: @tr("Browse…"); enabled: !root.st-scanning; clicked => { root.st-browse(); } }
+                        FlatButton { text: @tr("Scan folders"); enabled: !root.st-scanning && root.st-folders != ""; clicked => { root.st-scan-folders(); } }
+                    }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        if root.st-scanning && root.st-can-pause : FlatButton {
+                            text: root.st-paused ? @tr("Resume") : @tr("Pause");
+                            clicked => { root.st-pause(!root.st-paused); }
+                        }
+                        if root.st-scanning : FlatButton { text: @tr("Cancel scan"); clicked => { root.st-cancel(); } }
+                        FlatButton {
+                            text: @tr("Refresh");
+                            enabled: root.st-has-index && !root.st-scanning;
+                            clicked => { root.st-refresh(); }
+                        }
+                        FlatButton { text: @tr("Export JSON…"); enabled: root.st-has-index && !root.st-scanning; clicked => { root.st-export(false); } }
+                        FlatButton { text: @tr("Export CSV…"); enabled: root.st-has-index && !root.st-scanning; clicked => { root.st-export(true); } }
+                        CheckBox {
+                            text: @tr("Watch for changes");
+                            checked <=> root.st-watch;
+                            enabled: root.st-has-index;
+                            toggled => { root.st-set-watch(self.checked); }
+                        }
+                        Text {
+                            text: root.st-status;
+                            color: root.st-partial ? Theme.warn : Theme.muted;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        vertical-stretch: 1;
+                        TreeView {
+                            horizontal-stretch: 1;
+                            rows: root.st-tree;
+                            scroll-to: root.st-tree-scroll;
+                            scroll-serial: root.st-tree-serial;
+                            select(id) => { root.st-select(id); }
+                            toggle(id) => { root.st-toggle(id); }
+                            more(id) => { root.st-more(id); }
+                            zoom(id) => { root.st-zoom-node(id); }
+                        }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 6px;
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Link { text: "‹ " + @tr("Back"); enabled: root.st-can-back; clicked => { root.st-back(); } }
+                                Link { text: @tr("Forward") + " ›"; enabled: root.st-can-forward; clicked => { root.st-forward(); } }
+                                Link { text: "↑ " + @tr("Up"); enabled: root.st-can-up; clicked => { root.st-up(); } }
+                                Text {
+                                    text: root.st-zoom-path;
+                                    color: Theme.muted;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 1;
+                                    overflow: elide;
+                                }
+                                Link { text: @tr("Treemap"); color: root.st-icicle ? Theme.dim : Theme.accent; clicked => { root.st-set-icicle(false); } }
+                                Link { text: @tr("Icicle"); color: root.st-icicle ? Theme.accent : Theme.dim; clicked => { root.st-set-icicle(true); } }
+                            }
+                            MapView {
+                                vertical-stretch: 1;
+                                tiles: root.st-tiles;
+                                has-sel: root.st-has-sel;
+                                sel-x: root.st-sel-x;
+                                sel-y: root.st-sel-y;
+                                sel-w: root.st-sel-w;
+                                sel-h: root.st-sel-h;
+                                resized(w, h) => { root.st-map-resized(w, h); }
+                                hover(x, y) => { return root.st-map-hover(x, y); }
+                                click(x, y) => { root.st-map-click(x, y); }
+                                zoom(x, y) => { root.st-map-zoom(x, y); }
+                            }
+                            Text {
+                                text: @tr("Click to select, double-click to zoom in. Colours follow the file types in Extensions.");
+                                color: Theme.dim;
+                                font-size: 11px;
+                            }
+                        }
+                    }
+                    if root.st-has-sel : Panel {
+                        HorizontalLayout {
+                            padding: 10px;
+                            spacing: 12px;
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 2px;
+                                Text { text: root.st-sel-path; color: Theme.accent; overflow: elide; }
+                                Text { text: root.st-sel-detail; color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    FlatButton { text: @tr("Open in Explorer"); clicked => { root.st-open-explorer(); } }
+                                    FlatButton { text: @tr("Properties"); clicked => { root.st-properties(); } }
+                                    FlatButton { text: @tr("Rescan folder"); enabled: root.st-can-refresh; clicked => { root.st-refresh(); } }
+                                    FlatButton { text: @tr("Recycle…"); enabled: root.st-can-recycle; clicked => { root.st-recycle(); } }
+                                }
+                            }
+                        }
+                    }
+                    VerticalLayout {
+                        spacing: 4px;
+                        HorizontalLayout {
+                            spacing: 0;
+                            for t[i] in [@tr("Largest files"), @tr("Largest folders"), @tr("Extensions"), @tr("Search"), @tr("Errors")] : TabItem {
+                                text: t;
+                                active: root.st-tab == i;
+                                clicked => { root.st-set-tab(i); }
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                        }
+                        if root.st-tab == 3 : HorizontalLayout {
+                            spacing: 6px;
+                            LineEdit { text <=> root.st-q-name; placeholder-text: @tr("Name, *.log or /regex/"); horizontal-stretch: 2; accepted => { root.st-search(); } }
+                            LineEdit { text <=> root.st-q-path; placeholder-text: @tr("Path contains"); horizontal-stretch: 2; accepted => { root.st-search(); } }
+                            LineEdit { text <=> root.st-q-ext; placeholder-text: @tr("Extensions"); horizontal-stretch: 1; accepted => { root.st-search(); } }
+                            LineEdit { text <=> root.st-q-min; placeholder-text: @tr("Min size"); horizontal-stretch: 1; accepted => { root.st-search(); } }
+                            LineEdit { text <=> root.st-q-max; placeholder-text: @tr("Max size"); horizontal-stretch: 1; accepted => { root.st-search(); } }
+                            LineEdit { text <=> root.st-q-older; placeholder-text: @tr("Older than days"); horizontal-stretch: 1; accepted => { root.st-search(); } }
+                            LineEdit { text <=> root.st-q-newer; placeholder-text: @tr("Newer than days"); horizontal-stretch: 1; accepted => { root.st-search(); } }
+                            ComboBox { model: [@tr("Any"), @tr("Files"), @tr("Folders")]; current-index <=> root.st-q-kind; horizontal-stretch: 0; }
+                            FlatButton { text: @tr("Find"); primary: true; enabled: root.st-has-index; clicked => { root.st-search(); } }
+                            FlatButton { text: @tr("Clear"); clicked => { root.st-clear-search(); } }
+                        }
+                        if root.st-tab == 3 : Text { text: root.st-search-message; color: Theme.muted; font-size: 12px; }
+                        ResultList {
+                            height: 180px;
+                            rows: root.st-list;
+                            sortable: root.st-tab == 0 || root.st-tab == 1 || root.st-tab == 3;
+                            sorted: self.sortable ? root.st-list-sort : -1;
+                            ascending: root.st-list-asc;
+                            sort(c, asc) => { root.st-sort(c, asc); }
+                            select(id) => { root.st-select(id); }
+                        }
+                    }
+                }
+
+                // Cleanup.
+                if root.page == 5 : VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 10px;
+                        FlatButton { text: @tr("Examine"); primary: !root.cl-can-clean; enabled: !root.cl-busy; clicked => { root.cl-examine(); } }
+                        FlatButton { text: @tr("Clean selected…"); primary: root.cl-can-clean; enabled: root.cl-can-clean; clicked => { root.cl-clean(); } }
+                        if root.cl-busy : FlatButton { text: @tr("Cancel"); clicked => { root.cl-cancel(); } }
+                        Text {
+                            text: root.cl-status;
+                            color: Theme.muted;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                        }
+                    }
+                    if root.cl-busy && root.cl-progress > 0 : Bar { permille: root.cl-progress; }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        vertical-stretch: 1;
+                        Panel {
+                            horizontal-stretch: 1;
+                            VerticalLayout {
+                                padding: 8px;
+                                ListView {
+                                    for c in root.cl-categories : Rectangle {
+                                        height: 46px;
+                                        background: c.focused ? #3fe3f214 : cat-touch.has-hover ? Theme.hover : transparent;
+                                        cat-touch := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => { root.cl-focus(c.id); }
+                                        }
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            spacing: 10px;
+                                            Text {
+                                                width: 18px;
+                                                text: c.selected ? "☑" : "☐";
+                                                font-size: 15px;
+                                                color: !c.enabled ? Theme.dim : c.selected ? Theme.accent : Theme.muted;
+                                                vertical-alignment: center;
+                                                TouchArea {
+                                                    enabled: c.enabled;
+                                                    mouse-cursor: pointer;
+                                                    clicked => { root.cl-toggle(c.id); }
+                                                }
+                                            }
+                                            VerticalLayout {
+                                                horizontal-stretch: 1;
+                                                alignment: center;
+                                                Text { text: c.name; color: c.enabled ? Theme.text : Theme.muted; overflow: elide; }
+                                                Text {
+                                                    text: c.safety + (c.files == "" ? "" : "  ·  " + c.files);
+                                                    font-size: 11px;
+                                                    color: c.level == 0 ? Theme.accent-dim : c.level == 1 ? Theme.amber : Theme.warn;
+                                                    overflow: elide;
+                                                }
+                                            }
+                                            Text { text: c.size; color: Theme.amber; vertical-alignment: center; horizontal-alignment: right; }
+                                        }
+                                        Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
+                                    }
+                                }
+                            }
+                        }
+                        Panel {
+                            horizontal-stretch: 1;
+                            VerticalLayout {
+                                padding: 12px;
+                                spacing: 8px;
+                                Text {
+                                    text: root.cl-detail == "" ? @tr("Select a category to see what it contains, what happens after cleaning and how it is removed.") : root.cl-detail;
+                                    color: root.cl-detail == "" ? Theme.dim : Theme.text;
+                                    wrap: word-wrap;
+                                    vertical-stretch: root.cl-per-file ? 0 : 1;
+                                    vertical-alignment: top;
+                                }
+                                if root.cl-per-file : Text { text: @tr("Choose files one by one:"); color: Theme.muted; font-size: 12px; }
+                                if root.cl-per-file : ListView {
+                                    vertical-stretch: 1;
+                                    for f[i] in root.cl-candidates : Rectangle {
+                                        height: 24px;
+                                        background: cand-touch.has-hover ? Theme.hover : transparent;
+                                        cand-touch := TouchArea { mouse-cursor: pointer; clicked => { root.cl-toggle-file(i); } }
+                                        HorizontalLayout {
+                                            spacing: 8px;
+                                            Text { width: 16px; text: f.selected ? "☑" : "☐"; color: f.selected ? Theme.accent : Theme.muted; vertical-alignment: center; }
+                                            Text { horizontal-stretch: 1; preferred-width: 0; text: f.path; color: Theme.text; overflow: elide; vertical-alignment: center; }
+                                            Text { width: 90px; text: f.size; color: Theme.amber; horizontal-alignment: right; vertical-alignment: center; }
+                                            Text { width: 120px; text: f.modified; color: Theme.dim; horizontal-alignment: right; vertical-alignment: center; }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if root.cl-report != "" : Panel {
+                        border-color: Theme.accent-dim;
+                        VerticalLayout {
+                            padding: 12px;
+                            Text { text: root.cl-report; color: Theme.text; font-size: 12px; wrap: word-wrap; }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        Caption { label: @tr("History"); font-size: 11px; }
+                        Text {
+                            text: root.cl-history.length == 0 ? @tr("No cleanup runs stored.") : root.cl-history[0];
+                            color: Theme.dim;
+                            font-size: 12px;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                            vertical-alignment: center;
+                        }
+                        if root.cl-history.length > 0 : Link { text: @tr("Clear history"); clicked => { root.cl-clear-history(); } }
+                    }
+                }
+
+                // Duplicates.
+                if root.page == 6 : VerticalLayout {
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 10px;
+                        FlatButton { text: @tr("Find duplicates"); primary: true; enabled: root.du-can-find; clicked => { root.du-find(); } }
+                        if root.du-busy : FlatButton { text: @tr("Stop"); clicked => { root.du-cancel(); } }
+                        FlatButton { text: @tr("Move marked to Recycle Bin…"); enabled: root.du-can-recycle; clicked => { root.du-recycle(); } }
+                        Text { text: root.du-status; color: Theme.muted; wrap: word-wrap; horizontal-stretch: 1; vertical-alignment: center; }
+                    }
+                    if root.du-busy : Bar { permille: root.du-progress; }
+                    Panel {
+                        vertical-stretch: 1;
+                        VerticalLayout {
+                            padding: 8px;
+                            ListView {
+                                for d in root.du-rows : Rectangle {
+                                    height: d.header ? 30px : 24px;
+                                    background: !d.header && dup-touch.has-hover ? Theme.hover : transparent;
+                                    dup-touch := TouchArea {
+                                        enabled: !d.header;
+                                        mouse-cursor: pointer;
+                                        clicked => { root.du-toggle(d.group, d.file); }
+                                    }
+                                    HorizontalLayout {
+                                        padding-left: d.header ? 0px : 18px;
+                                        spacing: 8px;
+                                        if !d.header : Text { width: 16px; text: d.marked ? "☑" : "☐"; color: d.marked ? Theme.warn : Theme.muted; vertical-alignment: center; }
+                                        Text {
+                                            horizontal-stretch: 1;
+                                            preferred-width: 0;
+                                            text: d.text;
+                                            color: d.header ? Theme.accent : d.marked ? Theme.warn : Theme.text;
+                                            font-weight: d.header ? 700 : 400;
+                                            overflow: elide;
+                                            vertical-alignment: center;
+                                        }
+                                        Text { text: d.size; color: d.header ? Theme.amber : Theme.dim; vertical-alignment: center; }
+                                        if !d.header : Link { text: @tr("Show"); clicked => { root.du-open(d.group, d.file); } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Text {
+                        text: @tr("Mark the copies you do not need. One copy of each group always stays, and marked files go to the Recycle Bin.");
+                        color: Theme.dim;
+                        font-size: 11px;
+                        wrap: word-wrap;
                     }
                 }
 
@@ -739,6 +1592,27 @@ slint::slint! {
                             text: root.plan-can-start ? @tr("Cancel") : @tr("Close");
                             clicked => { root.dismiss(); }
                         }
+                    }
+                }
+            }
+        }
+        if root.sc-open : Rectangle {
+            background: #000000a0;
+            TouchArea {}
+            Panel {
+                width: min(parent.width - 40px, 560px);
+                height: sc-dialog.preferred-height;
+                border-color: root.sc-danger ? Theme.warn : Theme.accent-dim;
+                sc-dialog := VerticalLayout {
+                    padding: 20px;
+                    spacing: 12px;
+                    Text { text: root.sc-title; wrap: word-wrap; color: Theme.text; font-weight: 700; }
+                    Text { text: root.sc-body; wrap: word-wrap; color: Theme.muted; }
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: 10px;
+                        FlatButton { text: root.sc-ok; primary: true; clicked => { root.sc-confirm(); } }
+                        FlatButton { text: @tr("Cancel"); clicked => { root.sc-dismiss(); } }
                     }
                 }
             }
