@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] — installer, simpler window
 - Installer (Inno Setup, per-user, no admin): choose the folder, optional start with Windows; a newer version replaces the installed one, never side by side. Built with `scripts\build-installer.cmd` from a fresh clone; the portable zip stays. CI tests install, upgrade, move and uninstall.
 - Settings → *Start Reclaim with Windows (in the tray)*; like every setting it takes effect on *Save*.
 - Overview bar shows memory in use (installed minus available) with a teal → amber → red gradient.
