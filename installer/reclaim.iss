@@ -140,9 +140,11 @@ begin
     Result := False;
 end;
 
+{ Not in silent mode: the pages are still stepped through there, and this would
+  override /TASKS. }
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  if CurPageID = wpSelectTasks then
+  if (CurPageID = wpSelectTasks) and not WizardSilent() then
   begin
     if AutostartOn() then
       WizardSelectTasks('autostart')
