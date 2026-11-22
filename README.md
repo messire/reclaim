@@ -31,6 +31,15 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
   - page faults and the paging rate;
   - the change in committed memory, which trimming does not release.
 
+## Storage (0.3.0)
+
+- **Disk usage:** scan drives or folders and see where the space goes: a directory tree with sizes and shares, a treemap or icicle view coloured by file type, the largest files and folders, extension statistics and a list of what could not be read. Search the results by name, path, extension, size or age without scanning again. Export to JSON or CSV.
+- **Cleanup:** examine temporary files, caches, crash dumps, the Recycle Bin, old installers and large old downloads. Each category explains what it holds and what happens after cleaning. Nothing changes until you confirm; caches are deleted, your own files go to the Recycle Bin, and the report shows the estimate next to the free space Windows actually measured.
+- **Duplicates:** find identical files in the scanned area; you choose which copies go to the Recycle Bin, and one copy always stays.
+- Works without administrator rights. If you start Reclaim as administrator yourself, whole NTFS drives are read with a faster method.
+
+See [docs/storage/ARCHITECTURE.md](docs/storage/ARCHITECTURE.md), [ADR-0004](docs/adr/0004-storage.md) and [benchmarks](docs/benchmarks/storage.md).
+
 ## What it does not do
 
 - It does not free committed memory, make programs faster, or "clean" RAM. Trimmed pages come back when processes use them, and the report shows this.
@@ -39,7 +48,7 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 
 ## Privacy
 
-Reclaim works offline and has no account, telemetry or network access. Settings and run history stay in `%LOCALAPPDATA%\Reclaim` (`settings.toml`, `history.jsonl`). Only image names are stored, never paths or command lines. An error log is off by default. Settings → *Clear history and logs* deletes them.
+Reclaim works offline and has no account, telemetry or network access. Settings and run history stay in `%LOCALAPPDATA%\Reclaim` (`settings.toml`, `history.jsonl`, `storage.toml`, `cleanup-history.jsonl`; the cleanup history holds categories and byte counts, no file names). Only image names are stored, never paths or command lines. An error log is off by default. Settings → *Clear history and logs* deletes them.
 
 ## Installing
 
@@ -49,6 +58,7 @@ Download `reclaim-<version>-windows-x64-setup.exe` (installer: choose a folder, 
 
 - `reclaim.exe` opens the window, and `reclaim.exe --tray` starts in the notification area. Close (X) keeps Reclaim in the tray; tray → *Quit* exits.
 - `reclaim-cli.exe status | list [--eligible] | plan | trim [--dry-run] [--yes] [--json]` is the headless front end.
+- `reclaim-cli.exe storage drives | scan <path>... [--fast] [--top N] [--json F] [--csv F] | dupes <path>... | cleanup [--category ID]... [--run --yes]` analyses and cleans storage.
 
 Effectiveness claims must cite a published benchmark summary under [`docs/benchmarks/`](docs/benchmarks/). [How to run the benchmarks](docs/benchmarks/RUNNING.md) explains how they are produced.
 

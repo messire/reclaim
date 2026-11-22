@@ -3522,7 +3522,7 @@ dependencies = [
 
 [[package]]
 name = "reclaim-app"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "png",
  "raw-window-handle",
@@ -3540,27 +3540,33 @@ dependencies = [
 
 [[package]]
 name = "reclaim-bench"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "reclaim-core",
  "reclaim-engine",
  "reclaim-platform-fake",
  "reclaim-platform-windows",
+ "reclaim-storage-core",
+ "reclaim-storage-engine",
+ "reclaim-storage-windows",
  "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "reclaim-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "reclaim-core",
  "reclaim-engine",
  "reclaim-platform-windows",
+ "reclaim-storage-core",
+ "reclaim-storage-engine",
+ "reclaim-storage-windows",
 ]
 
 [[package]]
 name = "reclaim-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "proptest",
  "serde",
@@ -3569,7 +3575,7 @@ dependencies = [
 
 [[package]]
 name = "reclaim-engine"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "reclaim-core",
  "reclaim-platform-fake",
@@ -3579,14 +3585,14 @@ dependencies = [
 
 [[package]]
 name = "reclaim-platform-fake"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "reclaim-core",
 ]
 
 [[package]]
 name = "reclaim-platform-windows"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "reclaim-core",
  "windows-sys 0.61.2",
@@ -3594,7 +3600,7 @@ dependencies = [
 
 [[package]]
 name = "reclaim-storage-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "proptest",
  "regex",
@@ -3603,7 +3609,7 @@ dependencies = [
 
 [[package]]
 name = "reclaim-storage-engine"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "reclaim-storage-core",
@@ -3614,7 +3620,7 @@ dependencies = [
 
 [[package]]
 name = "reclaim-storage-windows"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "reclaim-storage-core",
  "reclaim-storage-engine",
@@ -4153,7 +4159,7 @@ dependencies = [
 
 [[package]]
 name = "spike-ui-slint"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "slint",
  "windows-sys 0.61.2",
@@ -4161,7 +4167,7 @@ dependencies = [
 
 [[package]]
 name = "spike-ui-win32"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "windows-sys 0.61.2",
 ]
