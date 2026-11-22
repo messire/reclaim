@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+- Overview bar shows memory in use (installed minus available) with a teal → amber → red gradient.
+- Settings and About are icons on the right of the tab row; About is the rightmost.
+- Removed the Dry run button and the Result and History tabs; a status bar shows run progress (with Cancel) and the last trim, e.g. "30 trimmed · 4.5 GiB". *Clear history and logs* moved to Settings. Dry runs and the full report stay in the CLI and `history.jsonl`.
+- About: the Slint attribution (AboutSlint, required by its royalty-free license) is smaller and labelled as a third-party toolkit.
+
 ## [0.1.0] — memory MVP (Windows)
 - Core domain and fake platform for tests (line coverage ≥ 90 %).
 - Windows adapter: system memory, per-process working set and private bytes, trim eligibility with reasons.

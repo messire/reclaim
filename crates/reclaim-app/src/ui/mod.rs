@@ -16,15 +16,14 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use slint::{ComponentHandle, ModelRc, SharedString, StandardListViewItem, VecModel};
+use slint::{ComponentHandle, ModelRc, VecModel};
 
 use reclaim_app::vm::{AppState, Column, Dirty, Reaction, Screen, SettingsForm, TrayState};
 use reclaim_core::outcome::RunMode;
-use reclaim_core::report::Tone;
 use reclaim_engine::{Command, EngineHandle, Event, StdClock, Store, spawn};
 use reclaim_platform_windows::WindowsPlatform;
 
-use view::{MainWindow, ProcRow, ReportLine, Tray};
+use view::{MainWindow, ProcRow, Tray};
 
 struct App {
     state: AppState,
@@ -59,21 +58,6 @@ fn act_dirty(f: impl FnOnce(&mut AppState) -> Dirty) {
         let d = f(&mut a.state);
         a.refresh(d);
     });
-}
-
-fn text(s: &str) -> StandardListViewItem {
-    StandardListViewItem::from(SharedString::from(s))
-}
-
-fn table(rows: impl Iterator<Item = Vec<String>>) -> ModelRc<ModelRc<StandardListViewItem>> {
-    let v: Vec<ModelRc<StandardListViewItem>> = rows
-        .map(|r| {
-            ModelRc::new(VecModel::from(
-                r.iter().map(|c| text(c)).collect::<Vec<_>>(),
-            ))
-        })
-        .collect();
-    ModelRc::new(VecModel::from(v))
 }
 
 impl App {
@@ -116,18 +100,19 @@ impl App {
         }
         if d.overview {
             let o = s.overview();
-            w.set_available(o.available.into());
+            w.set_used(o.used.into());
             w.set_total(o.total.into());
             w.set_load(o.load.into());
             w.set_committed(o.committed.into());
-            w.set_available_permille(i32::from(o.available_permille));
+            w.set_used_permille(i32::from(o.used_permille));
             w.set_commit_permille(i32::from(o.commit_permille));
             w.set_pressure_high(o.pressure_high);
             w.set_pressure(o.pressure.into());
             w.set_standby(o.standby.into());
             w.set_modified(o.modified.into());
             w.set_paging(o.paging.into());
-            w.set_last_run(o.last_run.into());
+            w.set_status(o.status.into());
+            w.set_can_cancel(o.can_cancel);
             w.set_can_run(o.can_run);
             w.set_trim_supported(o.trim_supported);
             w.set_details(o.details);
@@ -166,31 +151,6 @@ impl App {
                 None => w.set_plan_open(false),
             }
         }
-        if d.result {
-            let r = s.result();
-            w.set_result_status(r.status.into());
-            w.set_result_can_cancel(r.can_cancel);
-            w.set_result_progress(r.progress);
-            let lines: Vec<ReportLine> = r
-                .lines
-                .into_iter()
-                .map(|(tone, t)| ReportLine {
-                    tone: match tone {
-                        Tone::Info => 0,
-                        Tone::Warning => 1,
-                        Tone::Cost => 2,
-                        Tone::Note => 3,
-                    },
-                    text: t.into(),
-                })
-                .collect();
-            w.set_result_lines(ModelRc::new(VecModel::from(lines)));
-            w.set_result_rows(table(r.processes.into_iter().map(|(n, o)| vec![n, o])));
-        }
-        if d.history {
-            let items: Vec<StandardListViewItem> = s.history().iter().map(|h| text(h)).collect();
-            w.set_history(ModelRc::new(VecModel::from(items)));
-        }
         if d.settings {
             let f = s.settings_form();
             w.set_s_threshold(f.min_working_set_mib.into());
@@ -224,8 +184,8 @@ fn build() -> Option<MainWindow> {
     }
     w.on_navigate(|i| act(|s| s.show(Screen::from_index(i.max(0) as usize))));
     w.on_dismiss_warning(|| act_dirty(AppState::dismiss_warning));
-    w.on_run(|dry| act(|s| s.request_run(mode(dry), false)));
-    w.on_run_selected(|dry| act(|s| s.request_run(mode(dry), true)));
+    w.on_run(|| act(|s| s.request_run(RunMode::Trim, false)));
+    w.on_run_selected(|| act(|s| s.request_run(RunMode::Trim, true)));
     w.on_toggle_details(|on| act(|s| s.set_details(on)));
     // Table column 0 is the selection mark; data columns start at 1.
     w.on_sort(|c, asc| {
@@ -302,10 +262,6 @@ fn dark_title_bar(attempt: u32) {
             dark_title_bar(attempt + 1);
         });
     }
-}
-
-fn mode(dry: bool) -> RunMode {
-    if dry { RunMode::DryRun } else { RunMode::Trim }
 }
 
 /// Shows the window, creating it if it was destroyed on hide.
