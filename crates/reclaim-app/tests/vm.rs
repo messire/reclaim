@@ -118,9 +118,24 @@ fn processes_screen_sorts_filters_and_selects() {
     assert!(plan.title.contains("1 processes"), "{}", plan.title);
     assert!(plan.caveat.contains("does not free committed memory"));
     let go = r.s.confirm();
-    assert_eq!(r.s.screen, Screen::Result);
+    assert_eq!(
+        r.s.screen,
+        Screen::Processes,
+        "a run does not switch screens"
+    );
+    assert!(r.s.overview().status.starts_with("Trimming 0 of 1"));
+    assert!(r.s.overview().can_cancel);
     r.send(go);
     r.until(|e| matches!(e, Event::RunCompleted(_)));
+    assert!(
+        r.s.overview().status.starts_with("1 trimmed · "),
+        "{}",
+        r.s.overview().status
+    );
+    assert!(
+        !r.s.overview().can_cancel,
+        "the follow-up runs in the background"
+    );
     assert!(r.s.result().can_cancel);
     assert!(r.s.result().status.contains("follow-up"));
     let res = r.s.result();
@@ -159,11 +174,16 @@ fn unconfirmed_dry_run_completes_and_reaches_history() {
     r.until(|e| matches!(e, Event::RunCompleted(_)));
     assert_eq!(r.s.tray_state(), TrayState::Working, "follow-up pending");
     assert!(r.s.plan().is_none(), "no dialog when confirmation is off");
-    assert_eq!(r.s.screen, Screen::Result);
+    assert_eq!(r.s.screen, Screen::Overview);
     r.f.advance(61_000);
     r.h.send(Command::RefreshNow);
     r.until(|e| matches!(e, Event::RunFinalized(_)));
     assert_ne!(r.s.tray_state(), TrayState::Working);
+    assert_eq!(
+        r.s.overview().status,
+        "No run yet.",
+        "dry runs are not summarised"
+    );
     let res = r.s.result();
     assert_eq!(res.status, "Follow-up complete.");
     assert!(res.lines[0].1.starts_with("Dry run"));
@@ -213,7 +233,7 @@ fn dismissing_and_empty_plans() {
 #[test]
 fn overview_and_tray_follow_samples() {
     let mut s = AppState::new(180);
-    assert_eq!(s.overview().available, "not available");
+    assert_eq!(s.overview().used, "not available");
     assert_eq!(s.tray_tooltip(), "Reclaim");
     assert_eq!(s.tray_state(), TrayState::Unavailable, "no sample yet");
     let snap = SystemSnapshot {
@@ -227,13 +247,13 @@ fn overview_and_tray_follow_samples() {
     let r = s.apply(Event::SystemSample(snap));
     assert!(r.dirty.overview && r.dirty.tray);
     let o = s.overview();
-    assert_eq!(o.available, "2.0 GiB");
+    assert_eq!(o.used, "6.0 GiB");
     assert_eq!(o.load, "75 % in use");
     assert_eq!(o.committed, "5.9 GiB of 11.7 GiB");
     assert_eq!(o.pressure, "normal");
     assert_eq!(o.standby, "not available");
     assert_eq!(s.tray_tooltip(), "Reclaim: 2.0 GiB available");
-    assert_eq!((o.available_permille, o.commit_permille), (250, 500));
+    assert_eq!((o.used_permille, o.commit_permille), (750, 500));
     assert!(!o.pressure_high);
     assert_eq!(s.tray_state(), TrayState::Normal);
     let high = SystemSnapshot {
@@ -248,7 +268,7 @@ fn overview_and_tray_follow_samples() {
         !s.apply(Event::SystemSample(snap)).dirty.any(),
         "unchanged sample redraws nothing"
     );
-    assert_eq!(s.overview().last_run, "No run yet.");
+    assert_eq!(s.overview().status, "No run yet.");
     assert!(s.history().is_empty());
 
     // A refused start returns the UI to a state where the user can try again.
@@ -274,8 +294,15 @@ fn overview_and_tray_follow_samples() {
         s.clear_history().commands[..],
         [Command::ClearHistory]
     ));
-    assert_eq!(Screen::from_index(Screen::History.index()), Screen::History);
-    assert_eq!(Screen::from_index(5), Screen::About);
+    assert_eq!(
+        Screen::from_index(Screen::Settings.index()),
+        Screen::Settings
+    );
+    assert_eq!(
+        Screen::from_index(3),
+        Screen::About,
+        "About is the last screen"
+    );
     assert_eq!(Screen::from_index(99), Screen::Overview);
     let _ = Settings::default();
 }

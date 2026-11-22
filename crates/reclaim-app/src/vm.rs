@@ -24,10 +24,6 @@ pub enum Screen {
     Overview,
     /// Process table with eligibility.
     Processes,
-    /// The current or last run.
-    Result,
-    /// Stored runs.
-    History,
     /// Preferences.
     Settings,
     /// Version, license and attributions.
@@ -36,11 +32,9 @@ pub enum Screen {
 
 impl Screen {
     /// All screens in navigation order.
-    pub const ALL: [Screen; 6] = [
+    pub const ALL: [Screen; 4] = [
         Screen::Overview,
         Screen::Processes,
-        Screen::Result,
-        Screen::History,
         Screen::Settings,
         Screen::About,
     ];
@@ -59,8 +53,8 @@ impl Screen {
         match self {
             Screen::Processes => View::Processes,
             // Nothing on these screens shows live values: sample slowly.
-            Screen::History | Screen::Settings | Screen::About => View::Background,
-            Screen::Overview | Screen::Result => View::Overview,
+            Screen::Settings | Screen::About => View::Background,
+            Screen::Overview => View::Overview,
         }
     }
 }
@@ -229,16 +223,16 @@ pub enum Stage {
 /// Overview screen.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct OverviewView {
-    /// Available physical memory.
-    pub available: String,
+    /// Physical memory in use (installed minus available).
+    pub used: String,
     /// Installed physical memory.
     pub total: String,
     /// Share of physical memory in use.
     pub load: String,
     /// Commit charge of limit.
     pub committed: String,
-    /// Available share of installed memory, in per mille (0 when unknown).
-    pub available_permille: u16,
+    /// Share of installed memory in use, in per mille (0 when unknown).
+    pub used_permille: u16,
     /// Commit charge share of the commit limit, in per mille (0 when unknown).
     pub commit_permille: u16,
     /// Pressure word.
@@ -253,8 +247,10 @@ pub struct OverviewView {
     pub paging: String,
     /// Whether the details panel is on.
     pub details: bool,
-    /// Last run summary.
-    pub last_run: String,
+    /// Status bar: run progress, or the summary of the last trim.
+    pub status: String,
+    /// Whether the run in progress can be cancelled from the status bar.
+    pub can_cancel: bool,
     /// Whether a run can be started now.
     pub can_run: bool,
     /// Whether trimming is supported on this system.
@@ -554,9 +550,7 @@ impl AppState {
             let total = plan.targets.len();
             self.plan = None;
             self.stage = Stage::Running { done: 0, total };
-            self.screen = Screen::Result;
             return Reaction::dirty(Dirty {
-                screen: true,
                 result: true,
                 overview: true,
                 ..Dirty::default()
@@ -693,10 +687,8 @@ impl AppState {
             done: 0,
             total: plan.targets.len(),
         };
-        self.screen = Screen::Result;
         let mut r = Reaction::dirty(Dirty {
             plan: true,
-            screen: true,
             result: true,
             overview: true,
             ..Dirty::default()
@@ -792,25 +784,24 @@ impl AppState {
             details: self.details,
             can_run: !self.busy() && self.plan.is_none() && self.trim_supported(),
             trim_supported: self.trim_supported(),
-            last_run: self.last_run_line(),
+            status: self.status_line(),
+            can_cancel: matches!(self.stage, Stage::Running { .. }),
             ..OverviewView::default()
         };
         match &self.system {
             Some(s) => {
-                v.available = s.phys_available.to_string();
+                let used = s.phys_total.saturating_sub(s.phys_available);
+                v.used = used.to_string();
                 v.total = s.phys_total.to_string();
                 v.load = trf(
                     "overview.load",
-                    &[(
-                        "percent",
-                        &percent(s.phys_total.saturating_sub(s.phys_available), s.phys_total),
-                    )],
+                    &[("percent", &percent(used, s.phys_total))],
                 );
                 v.committed = trf(
                     "overview.committed",
                     &[("used", &s.commit_charge), ("limit", &s.commit_limit)],
                 );
-                v.available_permille = permille(s.phys_available, s.phys_total);
+                v.used_permille = permille(used, s.phys_total);
                 v.commit_permille = permille(s.commit_charge, s.commit_limit);
                 v.pressure = pressure(s.pressure).to_owned();
                 v.pressure_high = s.pressure == Pressure::High;
@@ -822,7 +813,7 @@ impl AppState {
             }
             None => {
                 for f in [
-                    &mut v.available,
+                    &mut v.used,
                     &mut v.total,
                     &mut v.load,
                     &mut v.committed,
@@ -838,28 +829,32 @@ impl AppState {
         v
     }
 
-    fn last_run_line(&self) -> String {
-        let Some(r) = self.history.last() else {
-            return tr("overview.never").to_owned();
+    /// Status bar text: progress while trimming, otherwise the totals of the current
+    /// or the last stored trim (dry runs are not summarised).
+    fn status_line(&self) -> String {
+        let summary = |r: &RunRecord| {
+            let t = r.totals();
+            trf(
+                "status.summary",
+                &[("trimmed", &t.trimmed), ("amount", &t.working_set_reduced)],
+            )
         };
-        let t = r.totals();
-        match r.mode {
-            RunMode::Trim => trf(
-                "overview.last_run",
-                &[
-                    ("when", &self.when(r.started_at)),
-                    ("trimmed", &t.trimmed),
-                    ("amount", &t.working_set_reduced),
-                ],
-            ),
-            RunMode::DryRun => trf(
-                "overview.last_dry_run",
-                &[
-                    ("when", &self.when(r.started_at)),
-                    ("targets", &r.plan.targets.len()),
-                ],
-            ),
+        match &self.stage {
+            Stage::Running { done, total } => {
+                return trf("run.progress", &[("done", done), ("total", total)]);
+            }
+            Stage::FollowUp { finished: f, .. } | Stage::Final(f)
+                if f.record.mode == RunMode::Trim =>
+            {
+                return summary(&f.record);
+            }
+            _ => {}
         }
+        self.history
+            .iter()
+            .rev()
+            .find(|r| r.mode == RunMode::Trim)
+            .map_or_else(|| tr("status.never").to_owned(), summary)
     }
 
     /// Process table rows, filtered and sorted.
