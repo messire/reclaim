@@ -129,11 +129,22 @@ end;
 
 { The tasks page shows the real start-with-Windows state, which the app's Settings may
   have changed since the last install. }
+function AutostartOn(): Boolean;
+var
+  Flag: AnsiString;
+begin
+  Result := RegValueExists(HKCU, '{#RunKey}', '{#RunValue}');
+  { Turned off in Task Manager / Settings > Apps > Startup: the first byte is odd. }
+  if Result and RegQueryBinaryValue(HKCU, '{#ApprovedKey}', '{#RunValue}', Flag) and
+     (Length(Flag) > 0) and ((Ord(Flag[1]) and 1) = 1) then
+    Result := False;
+end;
+
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if CurPageID = wpSelectTasks then
   begin
-    if RegValueExists(HKCU, '{#RunKey}', '{#RunValue}') then
+    if AutostartOn() then
       WizardSelectTasks('autostart')
     else
       WizardSelectTasks('!autostart');

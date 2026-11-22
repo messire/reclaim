@@ -69,13 +69,13 @@ function Find-Python {
         # Skip the Microsoft Store alias, which only opens the Store.
         if ($cmd -and $cmd.Source -notmatch "WindowsApps") {
             if ($name -eq "py") { return @($cmd.Source, "-3") }
-            return @($cmd.Source)
+            return $cmd.Source
         }
     }
     $local = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Programs\Python") -Filter python.exe -Recurse -ErrorAction SilentlyContinue |
         Select-Object -First 1
-    if ($local) { return @($local.FullName) }
-    return $null
+    if ($local) { return $local.FullName }
+    # No output: the caller's @(...) is then empty.
 }
 
 # --- Tools -----------------------------------------------------------------------------
@@ -88,11 +88,12 @@ if (-not $iscc) {
     $iscc = Find-Iscc
     if (-not $iscc) { throw "Inno Setup 6 was installed but ISCC.exe was not found." }
 }
-$python = Find-Python
-if (-not $python) {
+# @(...): a single path must stay an array (exe, then optional arguments such as "-3").
+$python = @(Find-Python)
+if ($python.Count -eq 0) {
     Install-WithWinget "Python.Python.3.12" "Python 3"
-    $python = Find-Python
-    if (-not $python) { throw "Python 3 was installed but python.exe was not found. Open a new terminal and run again." }
+    $python = @(Find-Python)
+    if ($python.Count -eq 0) { throw "Python 3 was installed but python.exe was not found. Open a new terminal and run again." }
 }
 
 # --- Build -----------------------------------------------------------------------------
