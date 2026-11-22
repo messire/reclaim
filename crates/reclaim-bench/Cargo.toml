@@ -38,15 +38,22 @@ path = "src/bin/scenario/main.rs"
 name = "reclaim-soak"
 path = "src/bin/soak/main.rs"
 
+[[bin]]
+name = "storage-bench"
+path = "src/bin/storage_bench/main.rs"
+
 [dependencies]
 reclaim-core.workspace = true
 reclaim-engine.workspace = true
+reclaim-storage-core.workspace = true
+reclaim-storage-engine.workspace = true
 
 [dev-dependencies]
 reclaim-platform-fake.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 reclaim-platform-windows.workspace = true
+reclaim-storage-windows.workspace = true
 windows-sys = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_Security",

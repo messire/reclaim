@@ -5,7 +5,10 @@
 //! reclaim-cli list [--eligible]
 //! reclaim-cli plan
 //! reclaim-cli trim [--dry-run] [--yes] [--no-follow-up] [--json]
+//! reclaim-cli storage …   (see `storage.rs`)
 //! ```
+
+mod storage;
 
 use std::io::{BufRead, Write};
 use std::process::ExitCode;
@@ -18,10 +21,13 @@ use reclaim_core::plan::{Plan, Selection};
 use reclaim_core::report::{Tone, report};
 use reclaim_engine::{Coordinator, Platform, StdClock, Step, Store};
 
-const USAGE: &str = "usage: reclaim-cli <status | list [--eligible] | plan | trim [--dry-run] [--yes] [--no-follow-up] [--json]>";
+const USAGE: &str = "usage: reclaim-cli <status | list [--eligible] | plan | trim [--dry-run] [--yes] [--no-follow-up] [--json] | storage ...>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("storage") {
+        return storage::run(&args[1..]);
+    }
     #[cfg(windows)]
     {
         run(reclaim_platform_windows::WindowsPlatform::new(), &args)

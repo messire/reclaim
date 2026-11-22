@@ -335,9 +335,9 @@ The fake platform can script: access denied, process exit at a given step, start
 
 ## 12. Extension points for later phases
 
-### 12.1 Storage (phase 2)
+### 12.1 Storage (implemented in 0.3.0)
 
-Reserved crate `reclaim-storage` with its own ports: `FsWalker` (handle-based, never follows reparse points: opens with `FILE_FLAG_OPEN_REPARSE_POINT`, compares volume and file IDs), `CategoryRules` (data-driven, per platform), `Deleter` (deletes by handle after re-validating the path is under an allowed root; no recursive retries). Scans are read-only; deletion requires a reviewed plan, mirroring the memory `Plan → Confirm → Run → Report` flow. The engine's run coordinator is generic over "operation kinds" to reuse the state machine.
+Implemented as `reclaim-storage-core`, `reclaim-storage-engine` and `reclaim-storage-windows`, with the screen state in `reclaim-app::storage_vm`; see [docs/storage/ARCHITECTURE.md](../storage/ARCHITECTURE.md) and [ADR-0004](../adr/0004-storage.md). The reserved design held: handle-based listing that never follows reparse points, data-driven categories, deletion by handle after revalidation, and a reviewed `Examine → Select → Confirm → Run → Report` flow. The storage jobs use their own short-lived threads instead of the memory engine's coordinator.
 
 ### 12.2 Automation (phase 3)
 

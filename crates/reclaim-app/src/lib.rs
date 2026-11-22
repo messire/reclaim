@@ -3,5 +3,6 @@
 //! binary).
 
 pub mod format;
+pub mod storage_vm;
 pub mod strings;
 pub mod vm;
