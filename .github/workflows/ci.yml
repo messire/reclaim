@@ -72,6 +72,19 @@ jobs:
           ./target/release/reclaim-cli.exe list --eligible
           ./target/release/reclaim-cli.exe trim --dry-run --no-follow-up --json | Out-File cli-dry-run.json
           if ((Get-Item cli-dry-run.json).Length -lt 100) { throw "dry run produced no record" }
+      - name: Storage CLI smoke test (read-only)
+        shell: pwsh
+        run: |
+          ./target/release/reclaim-cli.exe storage drives
+          if ($LASTEXITCODE -ne 0) { throw "storage drives failed" }
+          ./target/release/reclaim-cli.exe storage scan "$env:SystemRoot\System32" --top 5 --json storage-scan.json --csv storage-scan.csv
+          if ($LASTEXITCODE -ne 0) { throw "storage scan failed" }
+          $j = Get-Content storage-scan.json -Raw | ConvertFrom-Json
+          if ($j.totals.files -lt 1000) { throw "storage scan found too few files" }
+          ./target/release/reclaim-cli.exe storage cleanup
+          if ($LASTEXITCODE -ne 0) { throw "storage cleanup (examine only) failed" }
+          ./target/release/reclaim-cli.exe storage dupes "$env:SystemRoot\System32\drivers" --min-kib 16
+          if ($LASTEXITCODE -ne 0) { throw "storage dupes failed" }
       - name: App start-up and idle (B1-B3 smoke)
         shell: pwsh
         run: |
@@ -154,6 +167,17 @@ jobs:
             ./target/release/reclaim-scenario.exe --scenario $s --quick --probes-only --label ci @extra | Out-File -Append $env:GITHUB_STEP_SUMMARY
             if ($LASTEXITCODE -ne 0) { throw "scenario $s reported a finding or failed ($LASTEXITCODE)" }
           }
+      - name: Storage benchmark (generated tree, System32, fast NTFS scan of C:)
+        shell: pwsh
+        run: |
+          cargo build --release --locked -p reclaim-bench --bin storage-bench
+          New-Item -ItemType Directory -Force bench-results | Out-Null
+          ./target/release/storage-bench.exe --runs 3 | Tee-Object bench-results/storage-generated.jsonl
+          ./target/release/storage-bench.exe --runs 1 --path "$env:SystemRoot\System32" --fast C:\ | Tee-Object bench-results/storage-system32.jsonl
+          "## Storage benchmark (this runner)" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          Get-Content bench-results/storage-*.jsonl | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
       - name: Size of reclaim.exe with opt-level "s" (B6 comparison)
         shell: pwsh
         run: |

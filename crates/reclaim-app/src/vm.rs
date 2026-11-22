@@ -28,16 +28,30 @@ pub enum Screen {
     Settings,
     /// Version, license and attributions.
     About,
+    /// Disk usage: scan, tree, treemap, lists.
+    Analyze,
+    /// Cleanup categories.
+    Cleanup,
+    /// Duplicate files.
+    Duplicates,
 }
 
 impl Screen {
     /// All screens in navigation order.
-    pub const ALL: [Screen; 4] = [
+    pub const ALL: [Screen; 7] = [
         Screen::Overview,
         Screen::Processes,
         Screen::Settings,
         Screen::About,
+        Screen::Analyze,
+        Screen::Cleanup,
+        Screen::Duplicates,
     ];
+
+    /// Whether this is one of the storage screens.
+    pub fn is_storage(self) -> bool {
+        matches!(self, Screen::Analyze | Screen::Cleanup | Screen::Duplicates)
+    }
 
     /// Navigation index.
     pub fn index(self) -> usize {
@@ -53,7 +67,11 @@ impl Screen {
         match self {
             Screen::Processes => View::Processes,
             // Nothing on these screens shows live values: sample slowly.
-            Screen::Settings | Screen::About => View::Background,
+            Screen::Settings
+            | Screen::About
+            | Screen::Analyze
+            | Screen::Cleanup
+            | Screen::Duplicates => View::Background,
             Screen::Overview => View::Overview,
         }
     }
@@ -397,6 +415,11 @@ impl AppState {
             sort: (Column::WorkingSet, false),
             ..Self::default()
         }
+    }
+
+    /// Local time offset from UTC, minutes.
+    pub fn utc_offset(&self) -> i32 {
+        self.utc_offset_min
     }
 
     /// Settings in effect.

@@ -18,6 +18,9 @@ path = "src/main.rs"
 [dependencies]
 reclaim-core.workspace = true
 reclaim-engine.workspace = true
+reclaim-storage-core.workspace = true
+reclaim-storage-engine.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 reclaim-platform-windows.workspace = true
+reclaim-storage-windows.workspace = true

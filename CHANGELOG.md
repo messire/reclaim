@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0] — storage analyzer and cleaner
+- Disk usage tab: scan drives or folders (several at once) with progress, pause, resume and cancel; partial results stay and are marked. Directory tree with logical and on-disk size, share of parent and total, file and folder counts. Squarified treemap and icicle view coloured by file type, hover details, click to select, double-click to zoom, back, forward, up. Largest files and folders, extension statistics, list of unreadable locations. Search by name, path, extension, size, age and type (text, `*.glob` or `/regex/`) without rescanning. Open in Explorer, Properties, rescan a folder, move to the Recycle Bin. Export to JSON or CSV. Optional watching for changes.
+- Hard links counted once; compressed, sparse, offline and link entries flagged; links and other volumes never entered.
+- Fast NTFS scan of whole drives when Reclaim is started as administrator; Reclaim never asks for elevation.
+- Cleanup tab: temporary files, browser and app caches, developer and GPU shader caches, crash dumps, Recycle Bin, old installers and large old downloads (both file by file, to the Recycle Bin), and Windows system files through Windows Disk Cleanup. Each category says what it holds, what happens afterwards and how it is removed. Examining changes nothing; every file is checked again right before removal; locked, changed and protected files are skipped and reported. The report compares the estimate with the free space Windows measures. Local history without file names.
+- Duplicates tab: size, then file start, then full content (BLAKE3); probable and confirmed groups; nothing is marked automatically and one copy always stays.
+- Settings: scan and cleanup exclusions, scan threads, sizes on disk or file lengths, fast scan, duplicate minimum size, cleanup history.
+- CLI: `reclaim-cli storage drives | scan | dupes | cleanup`; cleanup only examines unless `--run --yes`.
+- Larger default window (1120×780).
+
 ## [0.2.0] — installer, simpler window
 - Installer (Inno Setup, per-user, no admin): choose the folder, optional start with Windows; a newer version replaces the installed one, never side by side. Built with `scripts\build-installer.cmd` from a fresh clone; the portable zip stays. CI tests install, upgrade, move and uninstall.
 - Settings → *Start Reclaim with Windows (in the tray)*; like every setting it takes effect on *Save*.

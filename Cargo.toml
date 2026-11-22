@@ -7,10 +7,13 @@ default-members = [
     "crates/reclaim-engine",
     "crates/reclaim-cli",
     "crates/reclaim-app",
+    "crates/reclaim-storage-core",
+    "crates/reclaim-storage-engine",
+    "crates/reclaim-storage-windows",
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.97"
 license = "MIT"
@@ -22,10 +25,15 @@ reclaim-core = { path = "crates/reclaim-core" }
 reclaim-engine = { path = "crates/reclaim-engine" }
 reclaim-platform-fake = { path = "crates/reclaim-platform-fake" }
 reclaim-platform-windows = { path = "crates/reclaim-platform-windows" }
+reclaim-storage-core = { path = "crates/reclaim-storage-core" }
+reclaim-storage-engine = { path = "crates/reclaim-storage-engine" }
+reclaim-storage-windows = { path = "crates/reclaim-storage-windows" }
 windows-sys = "0.61"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = { version = "0.9", default-features = false, features = ["parse", "serde", "display"] }
+regex = { version = "1.12", default-features = false, features = ["std", "perf", "unicode-case", "unicode-perl"] }
+blake3 = { version = "1.8", default-features = false, features = ["std", "pure"] }
 proptest = { version = "1", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]

@@ -64,3 +64,25 @@ Record the build, VM, date and the result of each line (✓, ✗ with a note, or
 | 27 | Untick it and press Save | "Settings saved."; Task Manager → Startup apps no longer lists Reclaim | — |
 | 28 | Run a newer setup while Reclaim runs | Folder page shows the installed folder; Reclaim is closed and replaced; Settings → Apps lists one Reclaim with the new version | — |
 | 29 | Uninstall from Settings → Apps | Files, shortcut and the start-with-Windows entry are gone; `%LOCALAPPDATA%\Reclaim` is kept | — |
+
+## Storage (0.3.0)
+
+| # | Step | Expected | ACC |
+|---|---|---|---|
+| 30 | Start Reclaim, stay on Overview, watch Task Manager | No disk activity from Reclaim; nothing is scanned until a storage tab is used | §5 |
+| 31 | Disk usage → pick C:, Scan drive (unelevated) | Progress counts rise; Pause stops them, Resume continues; status says "folder by folder" was used (no fast scan note unless elevated) | §5 |
+| 32 | Cancel a scan half way | Partial tree and map remain; status says the results are partial | §5 |
+| 33 | Click a large tile, then double-click it | Tree row is selected and scrolled into view; map zooms in; Back/Forward/Up work | §5 |
+| 34 | Hover tiles | Tooltip with path, size, share; colours match the Extensions list | §5 |
+| 35 | Select a file you own, Recycle… → confirm | File is in the Recycle Bin; sizes and lists update without a rescan | §5 |
+| 36 | Select `C:\Windows` or a drive root | Recycle… is disabled | §5 |
+| 37 | Search `*.log`, min size `10 MB` | Results appear without rescanning; clicking one selects it in tree and map | §5 |
+| 38 | Errors tab after scanning C: unelevated | Lists access-denied folders (e.g. `System Volume Information`) | §5 |
+| 39 | Export JSON and CSV, open them | JSON parses; both state whether the scan was complete and list unreadable folders; CSV opens in a spreadsheet with no formulas executed | §5 |
+| 40 | Cleanup → Examine | Each category shows a size or "not examined"; nothing is deleted | §5 |
+| 41 | Select Temporary files, Clean selected… | Confirmation says the files are deleted permanently; report shows deleted, skipped (in use) and the measured free-space change | §5 |
+| 42 | Old installers: tick two files only, clean | Only those two files are in the Recycle Bin | §5 |
+| 43 | Windows system files | Opens Windows Disk Cleanup, which asks for administrator approval itself | §5 |
+| 44 | Duplicates → Find, mark all copies of a group | The last copy cannot be marked; "One copy of every group always stays." | §5 |
+| 45 | Start Reclaim with "Run as administrator", Scan drive C: | Status says "fast NTFS scan"; totals agree with the unelevated scan within the size of files that changed | §5 |
+| 46 | Turn on Watch for changes, create a large file in a scanned folder | Within a few seconds the folder is rescanned and the file appears | §5 |

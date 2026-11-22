@@ -10,6 +10,7 @@
 
 mod autostart;
 mod icons;
+mod storage;
 mod view;
 mod win;
 
@@ -34,6 +35,12 @@ struct App {
     tray_state: Option<TrayState>,
     settings_message: String,
     ready_event: Option<String>,
+    /// Storage screens, created on their first visit.
+    storage: Option<reclaim_app::storage_vm::Storage>,
+    /// Change watchers and their poll timer while "Watch for changes" is on.
+    watcher: Option<(Vec<reclaim_storage_windows::watch::Watcher>, slint::Timer)>,
+    watch_on: bool,
+    storage_message: String,
 }
 
 thread_local! {
@@ -185,7 +192,14 @@ fn build() -> Option<MainWindow> {
     if let Some(icon) = icons::app() {
         w.set_app_icon(icon);
     }
-    w.on_navigate(|i| act(|s| s.show(Screen::from_index(i.max(0) as usize))));
+    w.on_navigate(|i| {
+        let screen = Screen::from_index(i.max(0) as usize);
+        act(|s| s.show(screen));
+        if screen.is_storage() || screen == Screen::Settings {
+            with(App::enter_storage);
+        }
+    });
+    storage::wire(&w);
     w.on_dismiss_warning(|| act_dirty(AppState::dismiss_warning));
     w.on_run(|| act(|s| s.request_run(RunMode::Trim, false)));
     w.on_run_selected(|| act(|s| s.request_run(RunMode::Trim, true)));
@@ -426,6 +440,10 @@ pub fn run() -> i32 {
             tray_state: Some(TrayState::Unavailable),
             settings_message: String::new(),
             ready_event: arg_value(&args, "--ready-event"),
+            storage: None,
+            watcher: None,
+            watch_on: false,
+            storage_message: String::new(),
         });
     });
 
