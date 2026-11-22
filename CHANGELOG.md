@@ -9,6 +9,7 @@
 - Settings: scan and cleanup exclusions, scan threads, sizes on disk or file lengths, fast scan, duplicate minimum size, cleanup history.
 - CLI: `reclaim-cli storage drives | scan | dupes | cleanup`; cleanup only examines unless `--run --yes`.
 - Larger default window (1120×780).
+- Installer: waits until the running Reclaim has really exited before replacing files, and if a copy started as administrator is still running, says so instead of failing with "DeleteFile failed; code 5".
 
 ## [0.2.0] — installer, simpler window
 - Installer (Inno Setup, per-user, no admin): choose the folder, optional start with Windows; a newer version replaces the installed one, never side by side. Built with `scripts\build-installer.cmd` from a fresh clone; the portable zip stays. CI tests install, upgrade, move and uninstall.
