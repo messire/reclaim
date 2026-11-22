@@ -43,7 +43,7 @@ Reclaim works offline and has no account, telemetry or network access. Settings 
 
 ## Installing
 
-Download `reclaim-<version>-windows-x64-setup.exe` (installer: choose a folder, optionally start with Windows; a newer version replaces the installed one) or the portable `reclaim-<version>-windows-x64.zip`. To build both from source on Windows, run `scripts\build-installer.cmd`; see [installer/README.md](installer/README.md).
+Download `reclaim-<version>-windows-x64-setup.exe` (installer: choose a folder, optionally start with Windows; a newer version replaces the installed one) or the portable `reclaim-<version>-windows-x64.zip`. To build both from source on Windows, run `scripts\build-installer.cmd` in the repository folder (or double-click it); they land in `dist\`. See [installer/README.md](installer/README.md).
 
 ## Using it
 

@@ -8,12 +8,19 @@ Reclaim ships two ways, built from the same binaries:
 
 ## Build it
 
-From a fresh clone, on Windows, with Rust installed ([rustup](https://rustup.rs) with the
-MSVC build tools, as for any build of Reclaim):
+On Windows, with Rust installed ([rustup](https://rustup.rs) with the MSVC build tools, as
+for any build of Reclaim), in the folder you cloned the repository into (the one with
+`Cargo.toml`), for example:
 
 ```cmd
-scripts\build-installer.cmd
+git clone https://github.com/messire/reclaim
+cd reclaim
+scripts\build-installer.cmd -Run
 ```
+
+Or double-click `scripts\build-installer.cmd` in Explorer: the script finds the repository
+folder itself, and the window stays open at the end. The results land in `dist\` inside the
+repository folder.
 
 The script builds `reclaim.exe` and `reclaim-cli.exe` in release mode, writes
 `THIRD_PARTY_NOTICES.txt`, compiles `installer/reclaim.iss` and packs the zip. Both land in
