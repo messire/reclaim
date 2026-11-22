@@ -104,6 +104,16 @@ $name = "reclaim-$version-windows-x64"
 Step "Reclaim $version"
 
 if (-not $SkipBuild) {
+    # A Reclaim started from target\ (a dev build, or autostart pointing there) locks the exe
+    # and cargo cannot replace it ("Access is denied"). Stop only those copies.
+    $targetDir = (Join-Path $root "target") + "\"
+    $running = @(Get-Process -Name reclaim, reclaim-cli -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and $_.Path.StartsWith($targetDir, [StringComparison]::OrdinalIgnoreCase) })
+    foreach ($p in $running) {
+        Step "Stopping $($p.Path) (pid $($p.Id)) so it can be rebuilt"
+        Stop-Process -Id $p.Id -Force
+        $p.WaitForExit(5000) | Out-Null
+    }
     Step "Building reclaim.exe and reclaim-cli.exe (release)"
     & cargo build --release --locked -p reclaim-app -p reclaim-cli
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed." }
