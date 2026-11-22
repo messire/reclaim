@@ -508,6 +508,11 @@ impl AppState {
                 })
             }
             Event::History(h) => {
+                // Cleared history: drop the finished run's summary too (a run in
+                // progress keeps its status).
+                if h.is_empty() && matches!(self.stage, Stage::Final(_)) {
+                    self.stage = Stage::Idle;
+                }
                 self.history = h;
                 Reaction::dirty(Dirty {
                     history: true,

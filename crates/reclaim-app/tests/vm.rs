@@ -159,6 +159,13 @@ fn processes_screen_sorts_filters_and_selects() {
         "Follow-up cut short by a newer run or by closing Reclaim."
     );
     assert!(!r.s.result().can_cancel);
+    assert!(r.s.overview().status.starts_with("1 trimmed · "));
+    r.s.apply(Event::History(Vec::new()));
+    assert_eq!(
+        r.s.overview().status,
+        "No run yet.",
+        "clearing history clears the summary"
+    );
     r.h.shutdown();
 }
 
