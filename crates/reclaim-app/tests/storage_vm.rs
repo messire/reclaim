@@ -278,6 +278,7 @@ fn refresh_reflects_changes() {
             path: "/r/b/copy.mkv".into(),
             root: None,
             file_id: None,
+            mtime: None,
             allocated: 0,
             is_dir: false,
         },

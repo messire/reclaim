@@ -18,7 +18,7 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Storage::FileSystem::{
     DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO,
-    FILE_DISPOSITION_FLAG_DELETE, FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
+    FILE_BASIC_INFO, FILE_DISPOSITION_FLAG_DELETE, FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
     FILE_DISPOSITION_FLAG_POSIX_SEMANTICS, FILE_DISPOSITION_INFO, FILE_DISPOSITION_INFO_EX,
     FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_NAME_NORMALIZED,
     FILE_READ_ATTRIBUTES, FileDispositionInfo, FileDispositionInfoEx, GetFinalPathNameByHandleW,
@@ -36,7 +36,7 @@ use super::{
     Handle, SHARE_ALL, file_index, file_info, from_wide, info_ex, last_error, map_error, map_io,
     open, wide,
 };
-use crate::common::{long_path, strip_long_prefix};
+use crate::common::{filetime_to_unix, long_path, strip_long_prefix};
 
 /// `ERROR_INVALID_FUNCTION`: some filesystems reject the extended disposition this way.
 const ERROR_INVALID_FUNCTION: u32 = 1;
@@ -128,6 +128,7 @@ fn revalidate(
     path: &str,
     expect_dir: bool,
     file_id: Option<u64>,
+    mtime: Option<i64>,
     check: impl FnOnce(&str) -> Result<(), Denied>,
 ) -> Result<Validated, ItemOutcome> {
     let requested = NormPath::new(path, PathStyle::Windows)
@@ -150,6 +151,15 @@ fn revalidate(
     if let Some(id) = file_id {
         let i = file_info(&handle).map_err(|e| ItemOutcome::Failed(map_error(e)))?;
         if file_index(&i) != id {
+            return Err(ItemOutcome::Skipped(SkipReason::Changed));
+        }
+    }
+    if let Some(expected) = mtime {
+        // Same handle as the deletion: a file rewritten in place since it was reviewed
+        // keeps its id but not its last write time.
+        let basic: FILE_BASIC_INFO =
+            info_ex(&handle).map_err(|e| ItemOutcome::Failed(map_error(e)))?;
+        if filetime_to_unix(basic.LastWriteTime) != expected {
             return Err(ItemOutcome::Skipped(SkipReason::Changed));
         }
     }
@@ -212,7 +222,7 @@ fn exists(path: &str) -> bool {
 
 impl Remover for WinRemover {
     fn delete(&self, t: &Target, guard: &Guard) -> ItemOutcome {
-        let v = match revalidate(&t.path, false, t.file_id, |p| t.check(guard, p)) {
+        let v = match revalidate(&t.path, false, t.file_id, t.mtime, |p| t.check(guard, p)) {
             Ok(v) => v,
             Err(o) => return o,
         };
@@ -226,7 +236,7 @@ impl Remover for WinRemover {
         if guard.check_cleanup(path, root).is_err() {
             return false;
         }
-        let Ok(v) = revalidate(path, true, None, |p| guard.check_cleanup(p, root)) else {
+        let Ok(v) = revalidate(path, true, None, None, |p| guard.check_cleanup(p, root)) else {
             return false;
         };
         // A non-empty directory fails with ERROR_DIR_NOT_EMPTY and stays.
@@ -243,7 +253,7 @@ impl Remover for WinRemover {
                 "no Recycle Bin on this drive".into(),
             ));
         }
-        let v = match revalidate(&t.path, t.is_dir, t.file_id, |p| t.check(guard, p)) {
+        let v = match revalidate(&t.path, t.is_dir, t.file_id, t.mtime, |p| t.check(guard, p)) {
             Ok(v) => v,
             Err(o) => return o,
         };

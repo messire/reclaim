@@ -86,6 +86,7 @@ fn target(path: &str, root: Option<&str>) -> Target {
         path: path.to_owned(),
         root: root.map(str::to_owned),
         file_id: m.file_id,
+        mtime: Some(m.mtime),
         allocated: m.allocated.unwrap_or(0),
         is_dir: m.kind == Kind::Dir,
     }
@@ -203,6 +204,22 @@ fn remover_revalidates_before_deleting() {
     );
     assert!(exists(&r));
 
+    // Rewritten in place after discovery: same identity, newer last write time.
+    let rw = d.p("rewritten.tmp");
+    write(&rw, 10);
+    let t = target(&rw, Some(root));
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(120);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&rw)
+        .and_then(|f| f.set_modified(later))
+        .expect("set modified");
+    assert_eq!(
+        WinRemover.delete(&t, &g),
+        ItemOutcome::Skipped(SkipReason::Changed)
+    );
+    assert!(exists(&rw));
+
     // Gone.
     let gone = d.p("gone.tmp");
     write(&gone, 10);
@@ -227,6 +244,7 @@ fn remover_revalidates_before_deleting() {
         path: d.p("jl"),
         root: Some(root.to_owned()),
         file_id: None,
+        mtime: None,
         allocated: 0,
         is_dir: true,
     };

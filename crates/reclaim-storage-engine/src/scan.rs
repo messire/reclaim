@@ -507,6 +507,13 @@ fn worker(
         };
         entries.clear();
         let listed = fs.read_dir(&job.path, &mut entries);
+        if listed.is_ok() && !excl.is_empty() {
+            // Excluded files are left out entirely: not counted, exported or hashed.
+            // Excluded directories stay, flagged, so the user sees what was skipped.
+            entries.retain(|e| {
+                e.kind == Kind::Dir || !excl.matches(&e.name, || fs.join(&job.path, &e.name), style)
+            });
+        }
         let mut next = Vec::new();
         {
             let mut t = write(tree);
@@ -732,6 +739,30 @@ mod tests {
         assert!(Exclusions::default().is_empty());
         let w = Exclusions::new(&["Node_Modules".into()], PathStyle::Windows);
         assert!(w.matches("node_modules", String::new, PathStyle::Windows));
+    }
+
+    #[test]
+    fn file_exclusions_leave_files_out() {
+        let mut fs = FakeFs::sample();
+        fs.add_file("/r", "big.tmp", 9000);
+        fs.add_file("/r/b", "keep.txt", 7);
+        let t = tree();
+        let o = ScanOptions {
+            exclude: vec!["*.tmp".into(), "/r/b/c".into()],
+            ..opts(1)
+        };
+        scan_blocking(
+            &fs,
+            &t,
+            ScanTarget::Roots(vec!["/r".into()]),
+            &o,
+            &ScanControl::default(),
+        );
+        let t = t.read().unwrap();
+        assert!(t.find("/r/big.tmp").is_none());
+        assert!(t.find("/r/b/c").is_none(), "path rules apply to files too");
+        assert!(t.find("/r/b/keep.txt").is_some());
+        assert_eq!(t.node(TOP).logical, 1 + 20 + 4000 + 7);
     }
 
     #[test]

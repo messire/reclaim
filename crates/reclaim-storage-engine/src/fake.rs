@@ -329,6 +329,9 @@ impl FakeFs {
         if t.file_id.is_some() && t.file_id != m.file_id {
             return Err(ItemOutcome::Skipped(SkipReason::Changed));
         }
+        if t.mtime.is_some_and(|mt| mt != m.mtime) {
+            return Err(ItemOutcome::Skipped(SkipReason::Changed));
+        }
         t.check(guard, &t.path)
             .map_err(|d| ItemOutcome::Skipped(SkipReason::from_denied(&d)))?;
         if self

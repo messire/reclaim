@@ -325,6 +325,7 @@ pub fn execute(
                             path: c.path.clone(),
                             root,
                             file_id: c.file_id,
+                            mtime: Some(c.mtime),
                             allocated: c.allocated,
                             is_dir: false,
                         };
@@ -612,6 +613,24 @@ mod tests {
         assert_eq!(r.volumes[0].free_before, free_before);
         assert_eq!(r.measured(), (4096 + 12288) as i128);
         assert!(!r.cancelled);
+    }
+
+    #[test]
+    fn files_rewritten_after_review_are_skipped() {
+        let mut f = fs();
+        let plan = plan_for(&f, &["user-temp"]);
+        let x = "/tmp/me/sub/deeper/x.log";
+        assert!(plan.entries[0].scan.candidates.iter().any(|c| c.path == x));
+        // Rewritten in place: same identity, new last write time.
+        f.set_mtime(x, 1_234_567);
+        let r = execute(&plan, &f, &f, &guard(), &AtomicBool::new(false), &|_| {});
+        assert!(f.exists(x));
+        assert!(
+            r.categories[0]
+                .notes
+                .iter()
+                .any(|n| n.contains("Changed") && n.contains("x.log"))
+        );
     }
 
     #[test]

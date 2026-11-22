@@ -17,7 +17,9 @@ use reclaim_storage_core::cleanup::{
     Action, CategoryScan, CleanupReport, ItemOutcome, Regenerates, Safety, SkipReason,
     WINDOWS_CATEGORIES,
 };
-use reclaim_storage_core::dupes::{Confidence, DupGroup, SelectionError, validate_selection};
+use reclaim_storage_core::dupes::{
+    Confidence, DupFile, DupGroup, SelectionError, validate_selection,
+};
 use reclaim_storage_core::entry::{Attrs, Kind};
 use reclaim_storage_core::guard::{Guard, KnownFolders};
 use reclaim_storage_core::ports::{DriveKind, Fs, Remover, Target, VolumeInfo, Volumes};
@@ -736,7 +738,7 @@ pub struct ConfirmView {
 enum Pending {
     RecycleNodes(Vec<NodeId>),
     Clean,
-    RecycleDupes(Vec<String>),
+    RecycleDupes(Vec<DupFile>),
 }
 
 #[derive(Debug)]
@@ -1053,9 +1055,16 @@ impl Storage {
             && vol.as_ref().is_some_and(|v| {
                 same_root(&v.root, &roots[0]) && v.fs.eq_ignore_ascii_case("ntfs")
             });
+        let mut pre_note = None;
         let fast = match &self.platform.fast_scan {
             Some(f) if self.settings.fast_ntfs_scan && self.platform.elevated && whole_volume => {
-                Some(f.clone())
+                // The fast scan reads the whole volume and cannot apply exclusions.
+                if self.settings.scan_exclusions.is_empty() {
+                    Some(f.clone())
+                } else {
+                    pre_note = Some("scan exclusions are set".to_owned());
+                    None
+                }
             }
             _ => None,
         };
@@ -1074,7 +1083,7 @@ impl Storage {
         let spawned = std::thread::Builder::new()
             .name("reclaim-storage-scan".into())
             .spawn(move || {
-                let mut note = None;
+                let mut note = pre_note;
                 if let Some(f) = fast {
                     let n2 = notify.clone();
                     let started = std::time::Instant::now();
@@ -2385,6 +2394,9 @@ impl Storage {
                             path: t.path(id),
                             root: None,
                             file_id: None,
+                            // A file rewritten since the scan is skipped; a folder's time
+                            // changes with its contents, so it is not compared.
+                            mtime: (!n.is_dir()).then_some(n.mtime),
                             allocated: n.allocated,
                             is_dir: n.is_dir(),
                         },
@@ -2446,8 +2458,8 @@ impl Storage {
                 self.run_cleanup();
                 d.cleanup = true;
             }
-            Pending::RecycleDupes(paths) => {
-                self.recycle_paths(paths);
+            Pending::RecycleDupes(files) => {
+                self.recycle_duplicates(files);
                 d.dupes = true;
             }
         }
@@ -3014,8 +3026,13 @@ impl Storage {
                         .get(g)
                         .is_some_and(|g| g.confidence == Confidence::Probable)
                 });
+                let files: Vec<DupFile> = sel
+                    .iter()
+                    .filter_map(|&(g, f)| r.groups.get(g).and_then(|g| g.files.get(f)))
+                    .cloned()
+                    .collect();
                 self.pending = Some((
-                    Pending::RecycleDupes(paths.clone()),
+                    Pending::RecycleDupes(files),
                     ConfirmView {
                         title: format!("Move {} duplicate files to the Recycle Bin?", paths.len()),
                         body: format!(
@@ -3048,16 +3065,9 @@ impl Storage {
         }
     }
 
-    fn recycle_paths(&mut self, paths: Vec<String>) {
-        let ids: Vec<NodeId> = {
-            let t = read(&self.tree);
-            paths.iter().filter_map(|p| t.find(p)).collect()
-        };
-        if ids.len() == paths.len() {
-            self.recycle_nodes(ids);
-            return;
-        }
-        // Paths no longer in the index: recycle them by path.
+    /// Recycles duplicates with the identity and last write time seen when they were
+    /// compared: a file replaced or rewritten since then is skipped, not recycled.
+    fn recycle_duplicates(&mut self, files: Vec<DupFile>) {
         self.removing = true;
         let remover = self.platform.remover.clone();
         let guard = self.platform.guard.clone();
@@ -3068,23 +3078,27 @@ impl Storage {
             .name("reclaim-storage-recycle".into())
             .spawn(move || {
                 let mut outcomes = Vec::new();
-                let mut t = write(&tree);
-                for p in paths {
-                    let id = t.find(&p);
+                let mut gone = Vec::new();
+                for f in files {
                     let target = Target {
-                        path: p.clone(),
+                        path: f.path.clone(),
                         root: None,
-                        file_id: None,
-                        allocated: id.map_or(0, |i| t.node(i).allocated),
+                        file_id: f.identity.map(|(_, id)| id),
+                        mtime: Some(f.mtime),
+                        allocated: f.allocated,
                         is_dir: false,
                     };
                     let o = remover.recycle(&target, &guard);
-                    if matches!(o, ItemOutcome::Recycled(_))
-                        && let Some(i) = id
-                    {
+                    if matches!(o, ItemOutcome::Recycled(_)) {
+                        gone.push(f.path.clone());
+                    }
+                    outcomes.push((f.path, o));
+                }
+                let mut t = write(&tree);
+                for p in gone {
+                    if let Some(i) = t.find(&p) {
                         t.remove(i);
                     }
-                    outcomes.push((p, o));
                 }
                 let analysis = Analysis::of(&t, basis);
                 drop(t);

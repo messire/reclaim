@@ -92,6 +92,9 @@ pub struct Target {
     /// Identity seen at discovery; a different identity means the path now names
     /// another object and the target is skipped.
     pub file_id: Option<u64>,
+    /// Last write time (Unix seconds) seen at discovery; a different time means the
+    /// object was rewritten since it was reviewed and the target is skipped.
+    pub mtime: Option<i64>,
     /// Allocated bytes seen at discovery (reported, not trusted for checks).
     pub allocated: u64,
     /// A directory (user selections only; cleanup removes files).
