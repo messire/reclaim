@@ -1,7 +1,7 @@
 name: Release
 
 # Tagged build (PLAN M6.3): push a tag `vX.Y.Z` to produce a draft GitHub release with the
-# zip, SHA256SUMS and third-party notices. The draft is published by the owner by hand.
+# installer, zip, SHA256SUMS and third-party notices. The draft is published by the owner by hand.
 on:
   push:
     tags: ["v*"]
@@ -36,28 +36,26 @@ jobs:
             $lines += "| $f | $a | $b | $($a -eq $b) |"
           }
           $lines | Out-File -Append $env:GITHUB_STEP_SUMMARY
-      - name: Third-party notices
-        run: python scripts/third_party_notices.py --out THIRD_PARTY_NOTICES.txt
-      - name: Package
+      - name: Installer and portable zip (scripts/build-installer.ps1)
         shell: pwsh
         run: |
-          $version = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).packages |
-            Where-Object { $_.name -eq "reclaim-app" } | Select-Object -ExpandProperty version
-          $name = "reclaim-$version-windows-x64"
-          New-Item -ItemType Directory -Force $name | Out-Null
-          Copy-Item target/release/reclaim.exe, target/release/reclaim-cli.exe, LICENSE, README.md, THIRD_PARTY_NOTICES.txt $name
-          Compress-Archive -Path "$name/*" -DestinationPath "$name.zip" -Force
-          $sums = foreach ($f in "$name.zip", "$name/reclaim.exe", "$name/reclaim-cli.exe") {
+          ./scripts/build-installer.ps1 -SkipBuild -NoInstallTools
+          $setup = (Get-Item dist/*-setup.exe).Name
+          $zip = (Get-Item dist/*.zip).Name
+          $stage = (Get-ChildItem target/installer -Directory | Select-Object -First 1).FullName
+          $sums = foreach ($f in "dist/$setup", "dist/$zip", "$stage/reclaim.exe", "$stage/reclaim-cli.exe") {
             "{0}  {1}" -f (Get-FileHash $f -Algorithm SHA256).Hash.ToLower(), (Split-Path $f -Leaf)
           }
           $sums | Out-File -Encoding ascii SHA256SUMS
           Get-Content SHA256SUMS
-          "ZIP=$name.zip" | Out-File -Append $env:GITHUB_ENV
+          "ZIP=dist/$zip" | Out-File -Append $env:GITHUB_ENV
+          "SETUP=dist/$setup" | Out-File -Append $env:GITHUB_ENV
       - uses: actions/upload-artifact@v4
         with:
           name: release
           path: |
             ${{ env.ZIP }}
+            ${{ env.SETUP }}
             SHA256SUMS
       - name: Draft GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -66,4 +64,5 @@ jobs:
           draft: true
           files: |
             ${{ env.ZIP }}
+            ${{ env.SETUP }}
             SHA256SUMS

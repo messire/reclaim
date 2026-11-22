@@ -8,6 +8,7 @@
 //! - `--tray` starts without a window. A second launch shows the running instance.
 //! - DPI: winit makes the process Per-Monitor V2 aware before the first window.
 
+mod autostart;
 mod icons;
 mod view;
 mod win;
@@ -159,6 +160,8 @@ impl App {
             w.set_s_confirm(f.confirm_runs);
             w.set_s_history(f.keep_history);
             w.set_s_log(f.log_enabled);
+            // Read from the registry each time: the installer or Task Manager may change it.
+            w.set_s_autostart(autostart::enabled());
             w.set_settings_message(self.settings_message.as_str().into());
         }
     }
@@ -208,10 +211,21 @@ fn build() -> Option<MainWindow> {
     w.on_save_settings(move || {
         let Some(w) = weak.upgrade() else { return };
         let form = App::form(&w);
+        let start_with_windows = w.get_s_autostart();
         with(|a| {
+            // Validate first: an invalid form changes nothing, autostart included.
             match a.state.save_settings(&form) {
                 Ok(r) => {
-                    a.settings_message = reclaim_app::strings::tr("settings.saved").to_owned();
+                    let autostart = if start_with_windows == autostart::enabled() {
+                        Ok(())
+                    } else {
+                        autostart::set(start_with_windows)
+                    };
+                    a.settings_message = match autostart {
+                        Ok(()) => reclaim_app::strings::tr("settings.saved").to_owned(),
+                        Err(code) => reclaim_app::strings::tr("settings.autostart_failed")
+                            .replace("{code}", &code.to_string()),
+                    };
                     a.react(r);
                 }
                 Err(msg) => a.settings_message = msg,

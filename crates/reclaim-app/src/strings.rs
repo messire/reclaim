@@ -80,6 +80,10 @@ pub const EN: &[(&str, &str)] = &[
     ),
     ("settings.saved", "Settings saved."),
     (
+        "settings.autostart_failed",
+        "Settings saved, but start with Windows could not be changed (system error {code}).",
+    ),
+    (
         "already_running",
         "Reclaim is already running; the open window was brought to the front.",
     ),

@@ -41,6 +41,10 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 
 Reclaim works offline and has no account, telemetry or network access. Settings and run history stay in `%LOCALAPPDATA%\Reclaim` (`settings.toml`, `history.jsonl`). Only image names are stored, never paths or command lines. An error log is off by default. Settings → *Clear history and logs* deletes them.
 
+## Installing
+
+Download `reclaim-<version>-windows-x64-setup.exe` (installer: choose a folder, optionally start with Windows; a newer version replaces the installed one) or the portable `reclaim-<version>-windows-x64.zip`. To build both from source on Windows, run `scripts\build-installer.cmd`; see [installer/README.md](installer/README.md).
+
 ## Using it
 
 - `reclaim.exe` opens the window, and `reclaim.exe --tray` starts in the notification area. Close (X) keeps Reclaim in the tray; tray → *Quit* exits.
