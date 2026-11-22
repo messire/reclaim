@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] — installer, simpler window
+- Installer (Inno Setup, per-user, no admin): choose the folder, optional start with Windows; a newer version replaces the installed one, never side by side. Built with `scripts\build-installer.cmd` from a fresh clone; the portable zip stays. CI tests install, upgrade, move and uninstall.
+- Settings → *Start Reclaim with Windows (in the tray)*; like every setting it takes effect on *Save*.
 - Overview bar shows memory in use (installed minus available) with a teal → amber → red gradient.
 - Settings and About are icons on the right of the tab row; About is the rightmost.
 - Removed the Dry run button and the Result and History tabs; a status bar shows run progress (with Cancel) and the last trim, e.g. "30 trimmed · 4.5 GiB". *Clear history and logs* moved to Settings. Dry runs and the full report stay in the CLI and `history.jsonl`.
