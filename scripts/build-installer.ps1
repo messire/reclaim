@@ -109,8 +109,10 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed." }
 }
 
-$stage = Join-Path $root "target\installer\$name"
-if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+# Only this version's folder: CI caches restore old ones, and later steps pick the only one.
+$stageRoot = Join-Path $root "target\installer"
+if (Test-Path $stageRoot) { Remove-Item -Recurse -Force $stageRoot }
+$stage = Join-Path $stageRoot $name
 New-Item -ItemType Directory -Force $stage | Out-Null
 
 Step "Writing third-party notices"
