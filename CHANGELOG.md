@@ -18,6 +18,7 @@ Versions follow the rule in [README → Versioning](README.md#versioning): patch
 - Disk usage: a status lamp starts the button row (grey before the first scan, pulsing amber while scanning, steady amber when paused or cancelled, green when done); the scan line moved to the status bar; "Watch for changes" has its own row.
 - Disk index: about a third smaller (48-byte records, compact counters, no growth slack after a scan) and freed after the window has been in the tray for 10 minutes (Settings; 0 keeps it). On Windows the hard-link table no longer keeps an entry for every file once the scan is done (24 bytes per file less). The window now uses the 16 px icon from the exe instead of a shrunk 48 px one.
 - Disk usage: a Disk / Folder switch picks what to scan and shows only that mode's controls (drive list and *Scan drive*, or folder field, *Browse…* and *Scan folders*); the knob and lit label are teal for Disk and amber for Folder. *Export CSV…* removed from the window; `reclaim-cli storage scan --csv` still writes CSV.
+- Disk usage: the *Browse…* folder dialog opens centred over the window and in front of it; before, it could open behind the window and the app looked frozen.
 
 ## [0.2.0] — installer, simpler window
 - Installer (Inno Setup, per-user, no admin): choose the folder, optional start with Windows; a newer version replaces the installed one, never side by side. Built with `scripts\build-installer.cmd` from a fresh clone; the portable zip stays. CI tests install, upgrade, move and uninstall.
