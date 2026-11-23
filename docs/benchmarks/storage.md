@@ -96,4 +96,18 @@ at 666–759 MB, almost all of it the index (about 100 bytes per entry). Changes
 | Bytes per entry | 97.5 | 64.2 |
 
 The saving on a Windows drive depends on name lengths and on how much slack the arrays
-had when the scan ended; it has not been measured there yet.
+had when the scan ended.
+
+Measured afterwards on the same drive: 680 MB right after the scan, so the changes above
+saved only about 3 %. The reason is Windows-only and does not show on Linux: directory
+listings on Windows give a file id but no link count, so every file was a hard-link
+candidate and kept a 24-byte entry in the link table for the life of the index. The
+Windows CI runner shows it in `index_parts` (bench-smoke of PR #15): for System32,
+21 538 files, the link table was 517 808 bytes, 24 bytes per file; for the generated
+tree, 20 000 files, 480 000 bytes.
+
+Since then the link table keeps only identities seen more than once (real hard links)
+after a scan. On the drive above that is about 6 million files × 24 bytes ≈ 145 MB less,
+so roughly 530 MB instead of 680 MB is expected right after a scan. This is an estimate
+from the per-entry sizes, not a measurement on that drive yet. The remaining cost is the
+48-byte record per entry plus its name; going lower needs a different record layout.
