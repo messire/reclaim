@@ -106,6 +106,7 @@ fn scan_builds_tree_map_and_lists() {
     let st = s.status();
     assert!(st.has_index && !st.scanning);
     assert!(st.partial, "an unreadable directory makes the scan partial");
+    assert!(!st.cancelled, "gaps alone are not a cancelled scan");
     assert!(st.line.contains("unreadable"));
 
     // The single root is expanded; children sorted by size.
@@ -356,6 +357,7 @@ fn cancel_keeps_partial_results() {
     pump(&mut s, &rx, |s| !s.scanning());
     let st = s.status();
     assert!(st.partial);
+    assert!(st.cancelled);
     assert!(st.line.contains("cancelled") || st.line.contains("gaps"));
 }
 

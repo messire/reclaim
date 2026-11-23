@@ -227,6 +227,7 @@ impl App {
             w.set_st_can_pause(st.can_pause);
             w.set_st_has_index(st.has_index);
             w.set_st_partial(st.partial);
+            w.set_st_cancelled(st.cancelled);
         }
         if d.tree || d.selection {
             let rows: Vec<TreeRow> = s
