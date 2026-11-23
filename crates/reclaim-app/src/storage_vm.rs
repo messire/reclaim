@@ -1675,6 +1675,26 @@ impl Storage {
         }
     }
 
+    /// Zooms the map one level deeper, into the folder of the current view that contains
+    /// `id` (a double-click on the map). A file directly in the view does not zoom.
+    pub fn zoom_toward(&mut self, id: NodeId) -> StorageDirty {
+        let target = {
+            let t = read(&self.tree);
+            if t.get(id).is_none_or(|n| !n.live()) {
+                None
+            } else {
+                std::iter::once(id)
+                    .chain(t.ancestors(id))
+                    .find(|&a| t.node(a).parent == self.zoom)
+                    .filter(|&a| t.node(a).is_dir())
+            }
+        };
+        match target {
+            Some(z) => self.zoom_in(z),
+            None => StorageDirty::default(),
+        }
+    }
+
     /// Zooms out one level.
     pub fn zoom_up(&mut self) -> StorageDirty {
         if self.zoom == TOP {

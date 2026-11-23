@@ -498,6 +498,7 @@ slint::slint! {
         pure callback hover(float, float) -> string;
         callback click(float, float);
         callback zoom(float, float);
+        callback zoom-out();
         private property <string> tip;
 
         background: Theme.track;
@@ -533,6 +534,11 @@ slint::slint! {
             }
             clicked => { root.click(self.mouse-x / 1px, self.mouse-y / 1px); }
             double-clicked => { root.zoom(self.mouse-x / 1px, self.mouse-y / 1px); }
+            pointer-event(e) => {
+                if (e.button == PointerEventButton.right && e.kind == PointerEventKind.up) {
+                    root.zoom-out();
+                }
+            }
         }
         if root.tip != "" : Rectangle {
             x: min(touch.mouse-x + 14px, max(0px, root.width - self.width - 4px));
@@ -1274,11 +1280,12 @@ slint::slint! {
                                 hover(x, y) => { return root.st-map-hover(x, y); }
                                 click(x, y) => { root.st-map-click(x, y); }
                                 zoom(x, y) => { root.st-map-zoom(x, y); }
+                                zoom-out => { root.st-up(); }
                             }
                             Text {
                                 preferred-width: 0;
                                 overflow: elide;
-                                text: @tr("Click to select, double-click to zoom in. Colours follow the file types in Extensions.");
+                                text: @tr("Click to select, double-click to zoom in, right-click to zoom out. Colours follow the file types in Extensions.");
                                 color: Theme.dim;
                                 font-size: 11px;
                             }

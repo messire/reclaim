@@ -532,7 +532,7 @@ pub(super) fn wire(w: &MainWindow) {
         st(|s| match s.node_at(x, y) {
             Some(n) => {
                 let mut d = s.select(n);
-                d.merge(s.zoom_in(n));
+                d.merge(s.zoom_toward(n));
                 d
             }
             None => StorageDirty::default(),
