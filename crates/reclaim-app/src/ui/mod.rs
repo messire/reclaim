@@ -362,17 +362,21 @@ fn arm_index_release(delay: Option<Duration>) {
             if a.state.visible() {
                 return false;
             }
-            let Some(s) = &mut a.storage else {
+            let Some(s) = &a.storage else {
                 return false;
             };
             if !s.has_index() {
                 return false;
             }
-            a.stop_watch();
-            match &mut a.storage {
-                Some(s) => !s.release_index(),
-                None => false,
+            if !s.can_release_index() {
+                // Busy: keep the index and its change watchers, try again in a minute.
+                return true;
             }
+            a.stop_watch();
+            if let Some(s) = &mut a.storage {
+                s.release_index();
+            }
+            false
         });
         if retry == Some(true) {
             arm_index_release(Some(Duration::from_secs(60)));

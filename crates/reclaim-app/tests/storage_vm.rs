@@ -255,7 +255,7 @@ fn selection_rectangle_follows_the_selection() {
 fn index_is_freed_on_request_and_scans_again() {
     let (mut s, rx, _) = scanned();
     assert_eq!(s.release_after_min(), 10);
-    assert!(s.has_index());
+    assert!(s.has_index() && s.can_release_index());
     assert!(s.release_index());
     assert!(!s.has_index());
     assert!(s.tree_rows().is_empty());
@@ -271,6 +271,7 @@ fn index_is_freed_on_request_and_scans_again() {
     assert!(!s.release_index());
     s.scan(vec!["/r".into()]);
     // Not while a scan runs.
+    assert!(!s.can_release_index());
     assert!(!s.release_index());
     pump(&mut s, &rx, |s| !s.scanning());
     assert!(s.has_index() && !s.tree_rows().is_empty());

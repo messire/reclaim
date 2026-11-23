@@ -1347,16 +1347,22 @@ impl Storage {
         self.settings.release_index_after_min
     }
 
+    /// Whether [`Self::release_index`] would free the index now: one is held and no scan,
+    /// duplicate search, removal or confirmation is in progress.
+    pub fn can_release_index(&self) -> bool {
+        let busy = self.scan.is_some()
+            || self.removing
+            || self.pending.is_some()
+            || self.dupes.cancel.is_some();
+        self.has_index && !busy
+    }
+
     /// Frees the disk index (the window has been hidden for a while): the tree, map, lists,
     /// search and duplicate results go, and memory returns to what the rest of Reclaim
     /// uses. Nothing happens while a scan, a duplicate search or a removal is running, or
     /// a confirmation is open. Returns whether the index was freed.
     pub fn release_index(&mut self) -> bool {
-        let busy = self.scan.is_some()
-            || self.removing
-            || self.pending.is_some()
-            || self.dupes.cancel.is_some();
-        if !self.has_index || busy {
+        if !self.can_release_index() {
             return false;
         }
         // Late events of earlier jobs refer to the old index and are ignored.
