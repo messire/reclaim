@@ -112,6 +112,10 @@ fn main() {
             last = Some((tree, s));
         }
         let (tree, s) = last.as_ref().expect("at least one run");
+        // As the app does once a scan has finished.
+        tree.write()
+            .unwrap_or_else(|p| p.into_inner())
+            .shrink_to_fit();
         let t = tree.read().unwrap_or_else(|p| p.into_inner());
         let ms = median(times);
         println!(
@@ -122,6 +126,12 @@ fn main() {
             s.progress.files as f64 / (ms / 1000.0),
             t.memory_bytes(),
             t.len()
+        );
+        let (nodes, names, counts, links) = t.memory_parts();
+        println!(
+            "{{\"bench\":\"index_parts\",\"threads\":{threads},\"node_bytes\":{},\"nodes\":{nodes},\"names\":{names},\"dir_counters\":{counts},\"links\":{links},\"bytes_per_entry\":{:.1}}}",
+            std::mem::size_of::<reclaim_storage_core::tree::Node>(),
+            t.memory_bytes() as f64 / t.len().max(1) as f64
         );
     }
     let (tree, _) = last.expect("scan ran");

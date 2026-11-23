@@ -103,7 +103,7 @@ pub fn files_from_tree(t: &Tree, from: NodeId, min_size: u64) -> Vec<DupFile> {
                 size: n.logical,
                 allocated: n.allocated,
                 identity: None,
-                mtime: n.mtime,
+                mtime: n.mtime(),
             });
         }
         true

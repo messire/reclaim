@@ -863,6 +863,7 @@ slint::slint! {
         in-out property <bool> ss-fast;
         in-out property <bool> ss-allocated;
         in-out property <string> ss-dup-min;
+        in-out property <string> ss-release;
         in-out property <bool> ss-history;
         in property <bool> ss-fast-available;
         in property <string> ss-message;
@@ -1186,6 +1187,11 @@ slint::slint! {
                         spacing: 12px;
                         Text { text: @tr("Duplicates: ignore files smaller than (KiB)"); color: Theme.muted; vertical-alignment: center; }
                         LineEdit { text <=> root.ss-dup-min; input-type: number; max-width: 100px; }
+                    }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Text { text: @tr("Free the disk index after (minutes in the tray, 0 = never)"); color: Theme.muted; vertical-alignment: center; }
+                        LineEdit { text <=> root.ss-release; input-type: number; max-width: 80px; }
                     }
                     CheckBox { text: @tr("Show sizes on disk (otherwise file lengths)"); checked <=> root.ss-allocated; }
                     CheckBox { text: @tr("Fast NTFS scan of whole drives"); checked <=> root.ss-fast; }

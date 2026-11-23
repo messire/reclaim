@@ -180,3 +180,45 @@ pub fn dark_caption(hwnd: isize) {
         }
     }
 }
+
+/// Gives the window the icons embedded in the exe (resource group 1, see build.rs) at the
+/// exact small and large sizes for its DPI. The toolkit only has one bitmap and lets
+/// Windows shrink it, which turns the 16 px icon (taskbar thumbnails, Task Manager,
+/// Alt+Tab) into noise. Cosmetic: failures keep the toolkit's icon.
+pub fn set_icons(hwnd: isize) {
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        ICON_BIG, ICON_SMALL, IMAGE_ICON, LR_DEFAULTCOLOR, LoadImageW, SM_CXICON, SM_CXSMICON,
+        SendMessageW, WM_SETICON,
+    };
+    const GROUP_ID: usize = 1;
+    let hwnd = hwnd as windows_sys::Win32::Foundation::HWND;
+    // SAFETY: `hwnd` is the live top-level window of this thread. The module handle of
+    // the exe needs no release; icons loaded without LR_SHARED belong to the window
+    // once set and are reclaimed by Windows with the process (two per window creation).
+    unsafe {
+        let module = GetModuleHandleW(std::ptr::null());
+        if module.is_null() {
+            return;
+        }
+        let dpi = match GetDpiForWindow(hwnd) {
+            0 => 96,
+            d => d,
+        };
+        for (which, metric) in [(ICON_SMALL, SM_CXSMICON), (ICON_BIG, SM_CXICON)] {
+            let size = GetSystemMetricsForDpi(metric, dpi);
+            let icon = LoadImageW(
+                module,
+                GROUP_ID as *const u16,
+                IMAGE_ICON,
+                size,
+                size,
+                LR_DEFAULTCOLOR,
+            );
+            if !icon.is_null() {
+                SendMessageW(hwnd, WM_SETICON, which as usize, icon as isize);
+            }
+        }
+    }
+}
