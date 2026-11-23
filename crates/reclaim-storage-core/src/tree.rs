@@ -714,6 +714,12 @@ impl Tree {
     /// Counts every hard-linked file once: of the scanned links to one file identity,
     /// the first in scan order keeps its size in the totals, the others are flagged
     /// `HARDLINK_DUP` and subtracted. Idempotent; call after a scan or refresh.
+    ///
+    /// Only identities seen more than once are kept for later passes. Windows listings
+    /// do not report link counts, so every file is a candidate while scanning; keeping
+    /// all of them would cost 24 bytes per file for as long as the index lives. The
+    /// price: a new link that a refresh finds to a file seen only once before is
+    /// counted twice until the next full scan.
     pub fn resolve_hardlinks(&mut self) {
         // Undo the previous pass (dead nodes were already subtracted with their parent).
         let previous = std::mem::take(&mut self.link_dups);
@@ -731,6 +737,7 @@ impl Tree {
         let mut i = 0;
         let mut dups = Vec::new();
         let mut grouped = Vec::new();
+        let mut kept = Vec::new();
         while i < self.links.len() {
             let mut j = i + 1;
             while j < self.links.len()
@@ -743,12 +750,15 @@ impl Tree {
                 for k in &self.links[i..j] {
                     grouped.push(k.node);
                 }
+                kept.extend_from_slice(&self.links[i..j]);
                 for k in &self.links[i + 1..j] {
                     dups.push(k.node);
                 }
             }
             i = j;
         }
+        kept.shrink_to_fit();
+        self.links = kept;
         for id in grouped {
             self.nodes[id as usize].attrs.set(Attrs::HARDLINK);
         }
@@ -765,6 +775,7 @@ impl Tree {
                 false,
             );
         }
+        dups.shrink_to_fit();
         self.link_dups = dups;
     }
 
@@ -1041,6 +1052,44 @@ pub(crate) mod tests {
         assert_eq!(t2.node(r2).logical, 8192);
         t2.remove(ids[1]);
         assert_eq!(t2.node(r2).logical, 8192);
+    }
+
+    #[test]
+    fn identities_seen_once_are_not_kept() {
+        // Windows listings give a file id but no link count: every file is a candidate.
+        let mut t = Tree::new(PathStyle::Windows);
+        let r = t.set_roots(&[EntryMeta::dir("C:\\")])[0];
+        let file = |name: &str, id: u64| EntryMeta {
+            file_id: Some(id),
+            nlink: None,
+            volume: Some(1),
+            ..EntryMeta::file(name, 100)
+        };
+        let ids = t.fill_dir(
+            r,
+            &[
+                file("a", 1),
+                file("b", 2),
+                file("c", 3),
+                file("a2", 1),
+                EntryMeta::dir("d"),
+            ],
+        );
+        let (_, _, _, before) = t.memory_parts();
+        assert!(before >= 4 * std::mem::size_of::<LinkKey>());
+        t.resolve_hardlinks();
+        let (_, _, _, after) = t.memory_parts();
+        assert_eq!(
+            after,
+            2 * std::mem::size_of::<LinkKey>() + 4,
+            "only the pair (and its one duplicate) stays"
+        );
+        assert_eq!(t.node(r).logical, 300);
+        // A refresh that adds a third link to the kept identity still counts it once.
+        t.fill_dir(ids[4], &[file("a3", 1)]);
+        t.resolve_hardlinks();
+        assert_eq!(t.node(r).logical, 300);
+        assert_eq!(t.hardlink_duplicates(), 2);
     }
 
     #[test]
