@@ -116,6 +116,8 @@ slint::slint! {
         out property <length> col-mark: 16px;
         out property <length> col-pid: 64px;
         out property <length> col-bytes: 116px;
+        // Room kept free on the right of list rows so the scroll bar never covers text.
+        out property <length> scrollbar-gap: 16px;
     }
 
     // Faint background grid. Static: the renderer only repaints it under dirty regions.
@@ -381,13 +383,14 @@ slint::slint! {
             padding-right: 8px;
             padding-bottom: 4px;
             HorizontalLayout {
-                spacing: 8px;
+                spacing: 6px;
                 min-height: 30px;
                 max-height: 30px;
                 Caption { label: @tr("Name"); font-size: 11px; horizontal-stretch: 1; }
                 Caption { label: @tr("Size"); font-size: 11px; width: 160px; }
-                Caption { label: @tr("Parent"); font-size: 11px; width: 52px; }
-                Caption { label: @tr("Files"); font-size: 11px; width: 64px; }
+                Caption { label: @tr("Parent"); font-size: 11px; width: 52px; horizontal-alignment: right; }
+                Caption { label: @tr("Files"); font-size: 11px; width: 84px; horizontal-alignment: right; }
+                Rectangle { width: Theme.scrollbar-gap - 6px; }
             }
             Rule {}
             list := ListView {
@@ -412,6 +415,7 @@ slint::slint! {
                     }
                     HorizontalLayout {
                         padding-left: r.depth * 14px;
+                        padding-right: Theme.scrollbar-gap;
                         spacing: 6px;
                         Text {
                             width: 14px;
@@ -469,7 +473,7 @@ slint::slint! {
                             vertical-alignment: center;
                         }
                         Text {
-                            width: 64px;
+                            width: 84px;
                             text: r.files;
                             color: Theme.dim;
                             horizontal-alignment: right;
@@ -583,6 +587,7 @@ slint::slint! {
                 HeadCell { text: @tr("Location"); column: 1; horizontal-stretch: 1; preferred-width: 0; sorted: -1; ascending: false; clicked => { root.header(1); } }
                 HeadCell { text: @tr("Size"); column: 0; width: 90px; sorted: root.sorted; ascending: root.ascending; clicked => { root.header(0); } }
                 HeadCell { text: @tr("Modified"); column: 3; width: 130px; sorted: root.sorted; ascending: root.ascending; clicked => { root.header(3); } }
+                Rectangle { width: Theme.scrollbar-gap - 8px; }
             }
             Rule {}
             ListView {
@@ -599,6 +604,7 @@ slint::slint! {
                         }
                     }
                     HorizontalLayout {
+                        padding-right: Theme.scrollbar-gap;
                         spacing: 8px;
                         Rectangle {
                             width: 16px;
@@ -1361,7 +1367,7 @@ slint::slint! {
                                         }
                                         HorizontalLayout {
                                             padding-left: 6px;
-                                            padding-right: 6px;
+                                            padding-right: Theme.scrollbar-gap;
                                             spacing: 10px;
                                             Text {
                                                 width: 18px;
@@ -1413,6 +1419,7 @@ slint::slint! {
                                         background: cand-touch.has-hover ? Theme.hover : transparent;
                                         cand-touch := TouchArea { mouse-cursor: pointer; clicked => { root.cl-toggle-file(i); } }
                                         HorizontalLayout {
+                                            padding-right: Theme.scrollbar-gap;
                                             spacing: 8px;
                                             Text { width: 16px; text: f.selected ? "☑" : "☐"; color: f.selected ? Theme.accent : Theme.muted; vertical-alignment: center; }
                                             Text { horizontal-stretch: 1; preferred-width: 0; text: f.path; color: Theme.text; overflow: elide; vertical-alignment: center; }
@@ -1472,6 +1479,7 @@ slint::slint! {
                                     }
                                     HorizontalLayout {
                                         padding-left: d.header ? 0px : 18px;
+                                        padding-right: Theme.scrollbar-gap;
                                         spacing: 8px;
                                         if !d.header : Text { width: 16px; text: d.marked ? "☑" : "☐"; color: d.marked ? Theme.warn : Theme.muted; vertical-alignment: center; }
                                         Text {
