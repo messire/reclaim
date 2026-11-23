@@ -481,6 +481,8 @@ pub struct StatusView {
     pub can_pause: bool,
     /// The index is not complete (cancelled or unreadable parts).
     pub partial: bool,
+    /// The last scan was cancelled (its results are partial).
+    pub cancelled: bool,
 }
 
 /// One row of the directory tree.
@@ -2054,15 +2056,18 @@ impl Storage {
                 has_index: true,
                 can_pause: !s.fast,
                 partial: true,
+                cancelled: false,
             };
         }
         let mut line = String::new();
         let mut partial = false;
+        let mut cancelled = false;
         if let Some(s) = &self.summary {
             let t = read(&self.tree);
             let basis = self.basis();
             let c = t.counts(TOP);
             partial = s.partial || s.state != ScanState::Complete;
+            cancelled = s.state != ScanState::Complete;
             line = format!(
                 "{}: {} in {} files, {} folders, {:.1} s{}{}",
                 match s.state {
@@ -2112,6 +2117,7 @@ impl Storage {
             has_index: self.has_index,
             can_pause: false,
             partial,
+            cancelled,
         }
     }
 
