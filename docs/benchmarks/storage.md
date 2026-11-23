@@ -41,3 +41,36 @@ JSON lines in the job summary and the `bench-smoke` artifact. Those runner numbe
 test on shared virtual hardware, not a performance claim. No measurement on the reference
 laptop (`reference-hardware.md`) has been made yet; Reclaim makes no claim of being faster than
 other tools.
+
+### GitHub Windows runner, 2026-11-22 (PR #11 CI, one run)
+
+Release build, `storage-bench --runs 3` on the generated tree, then `--runs 1` on
+`C:\Windows\System32` and the fast scan of `C:`. Shared virtual hardware; single run; read as a
+smoke test only.
+
+Generated tree (20 000 files, 417 folders):
+
+| Measurement | Result |
+|---|---|
+| Scan, 1 thread (median of 3) | 27.2 ms |
+| Scan, 4 threads (median of 3) | 18.0 ms |
+| Index memory | 2.9 MB for 20 418 nodes |
+| Treemap layout 1200×700 | 0.52 ms, 6 043 cells |
+| Search `*.log` / path regex | 6.84 ms / 1.01 ms |
+| Duplicates, all 20 000 files | 405.4 ms, 92 MB read (216.8 MiB/s) |
+
+`C:\Windows\System32` (21 538 files, 1 662 folders, 2 access errors):
+
+| Measurement | Result |
+|---|---|
+| Scan, 1 thread (first, cold cache) | 1 186.8 ms |
+| Scan, 4 threads (second, warm cache) | 52.7 ms |
+| Index memory | 4.1 MB for 23 203 nodes |
+| Treemap layout 1200×700 | 1.55 ms, 3 215 cells |
+| Duplicates, 14 680 candidates | 92.4 s, 476 MB read (4.9 MiB/s, cold disk) |
+
+The two System32 scans ran in order on the same tree, so the gap between them is mostly the
+file system cache, not threading.
+
+Fast NTFS scan of the whole `C:` volume: 1 215 935 files, 210 461 folders, 0 orphans, 34.7 s.
+A folder-by-folder scan of the same volume was not measured, so there is no comparison.

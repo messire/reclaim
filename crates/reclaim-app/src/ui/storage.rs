@@ -41,6 +41,27 @@ fn model<T: Clone + 'static>(v: Vec<T>) -> ModelRc<T> {
     ModelRc::new(VecModel::from(v))
 }
 
+/// Updates a list in place when only row contents changed (a click that selects a row),
+/// so the rows on screen are kept and a click or double-click in progress is not lost.
+/// A different row count replaces the model.
+fn update<T: Clone + PartialEq + 'static>(
+    cur: &ModelRc<T>,
+    v: Vec<T>,
+    set: impl FnOnce(ModelRc<T>),
+) {
+    if let Some(vm) = cur.as_any().downcast_ref::<VecModel<T>>()
+        && vm.row_count() == v.len()
+    {
+        for (i, r) in v.into_iter().enumerate() {
+            if vm.row_data(i).as_ref() != Some(&r) {
+                vm.set_row_data(i, r);
+            }
+        }
+    } else {
+        set(model(v));
+    }
+}
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -228,7 +249,7 @@ impl App {
                     color: color(r.slot),
                 })
                 .collect();
-            w.set_st_tree(model(rows));
+            update(&w.get_st_tree(), rows, |m| w.set_st_tree(m));
             if d.selection {
                 w.set_st_tree_scroll(s.selected_row().map_or(-1, |i| i as i32));
                 w.set_st_tree_serial(w.get_st_tree_serial().wrapping_add(1));
@@ -257,9 +278,9 @@ impl App {
                     w.set_st_sel_y(y);
                     w.set_st_sel_w(ww);
                     w.set_st_sel_h(h);
-                    w.set_st_has_sel(true);
+                    w.set_st_map_sel(true);
                 }
-                None => w.set_st_has_sel(false),
+                None => w.set_st_map_sel(false),
             }
             let v = s.selection();
             w.set_st_sel_path(v.path.into());
@@ -270,10 +291,7 @@ impl App {
             w.set_st_can_back(v.can_back);
             w.set_st_can_forward(v.can_forward);
             w.set_st_can_up(v.can_up);
-            // The selection panel needs `has-sel` for the node, not the map rectangle.
-            if v.any {
-                w.set_st_has_sel(true);
-            }
+            w.set_st_has_sel(v.any);
         }
         if d.lists {
             let rows: Vec<ListRow> = s
@@ -288,7 +306,7 @@ impl App {
                     color: color(r.slot),
                 })
                 .collect();
-            w.set_st_list(model(rows));
+            update(&w.get_st_list(), rows, |m| w.set_st_list(m));
             w.set_st_tab(s.tab().index() as i32);
             let (by, asc) = s.list_sort();
             w.set_st_list_sort(by.index() as i32);
@@ -514,7 +532,7 @@ pub(super) fn wire(w: &MainWindow) {
         st(|s| match s.node_at(x, y) {
             Some(n) => {
                 let mut d = s.select(n);
-                d.merge(s.zoom_in(n));
+                d.merge(s.zoom_toward(n));
                 d
             }
             None => StorageDirty::default(),

@@ -116,6 +116,8 @@ slint::slint! {
         out property <length> col-mark: 16px;
         out property <length> col-pid: 64px;
         out property <length> col-bytes: 116px;
+        // Room kept free on the right of list rows so the scroll bar never covers text.
+        out property <length> scrollbar-gap: 16px;
     }
 
     // Faint background grid. Static: the renderer only repaints it under dirty regions.
@@ -381,13 +383,14 @@ slint::slint! {
             padding-right: 8px;
             padding-bottom: 4px;
             HorizontalLayout {
-                spacing: 8px;
+                spacing: 6px;
                 min-height: 30px;
                 max-height: 30px;
                 Caption { label: @tr("Name"); font-size: 11px; horizontal-stretch: 1; }
                 Caption { label: @tr("Size"); font-size: 11px; width: 160px; }
-                Caption { label: @tr("Parent"); font-size: 11px; width: 52px; }
-                Caption { label: @tr("Files"); font-size: 11px; width: 64px; }
+                Caption { label: @tr("Parent"); font-size: 11px; width: 52px; horizontal-alignment: right; }
+                Caption { label: @tr("Files"); font-size: 11px; width: 84px; horizontal-alignment: right; }
+                Rectangle { width: Theme.scrollbar-gap - 6px; }
             }
             Rule {}
             list := ListView {
@@ -412,6 +415,7 @@ slint::slint! {
                     }
                     HorizontalLayout {
                         padding-left: r.depth * 14px;
+                        padding-right: Theme.scrollbar-gap;
                         spacing: 6px;
                         Text {
                             width: 14px;
@@ -469,7 +473,7 @@ slint::slint! {
                             vertical-alignment: center;
                         }
                         Text {
-                            width: 64px;
+                            width: 84px;
                             text: r.files;
                             color: Theme.dim;
                             horizontal-alignment: right;
@@ -494,6 +498,7 @@ slint::slint! {
         pure callback hover(float, float) -> string;
         callback click(float, float);
         callback zoom(float, float);
+        callback zoom-out();
         private property <string> tip;
 
         background: Theme.track;
@@ -529,6 +534,11 @@ slint::slint! {
             }
             clicked => { root.click(self.mouse-x / 1px, self.mouse-y / 1px); }
             double-clicked => { root.zoom(self.mouse-x / 1px, self.mouse-y / 1px); }
+            pointer-event(e) => {
+                if (e.button == PointerEventButton.right && e.kind == PointerEventKind.up) {
+                    root.zoom-out();
+                }
+            }
         }
         if root.tip != "" : Rectangle {
             x: min(touch.mouse-x + 14px, max(0px, root.width - self.width - 4px));
@@ -583,6 +593,7 @@ slint::slint! {
                 HeadCell { text: @tr("Location"); column: 1; horizontal-stretch: 1; preferred-width: 0; sorted: -1; ascending: false; clicked => { root.header(1); } }
                 HeadCell { text: @tr("Size"); column: 0; width: 90px; sorted: root.sorted; ascending: root.ascending; clicked => { root.header(0); } }
                 HeadCell { text: @tr("Modified"); column: 3; width: 130px; sorted: root.sorted; ascending: root.ascending; clicked => { root.header(3); } }
+                Rectangle { width: Theme.scrollbar-gap - 8px; }
             }
             Rule {}
             ListView {
@@ -599,6 +610,7 @@ slint::slint! {
                         }
                     }
                     HorizontalLayout {
+                        padding-right: Theme.scrollbar-gap;
                         spacing: 8px;
                         Rectangle {
                             width: 16px;
@@ -712,6 +724,9 @@ slint::slint! {
         in property <int> st-tree-serial;
         in property <[Tile]> st-tiles;
         in property <bool> st-has-sel;
+        // The selection has a rectangle on the current map (separate from `st-has-sel`,
+        // which says something is selected at all).
+        in property <bool> st-map-sel;
         in property <float> st-sel-x;
         in property <float> st-sel-y;
         in property <float> st-sel-w;
@@ -1219,8 +1234,11 @@ slint::slint! {
                     HorizontalLayout {
                         spacing: 10px;
                         vertical-stretch: 1;
+                        // Both halves take half the width whatever they show (preferred-width 0),
+                        // so selecting or zooming never resizes the map.
                         TreeView {
                             horizontal-stretch: 1;
+                            preferred-width: 0;
                             rows: root.st-tree;
                             scroll-to: root.st-tree-scroll;
                             scroll-serial: root.st-tree-serial;
@@ -1231,6 +1249,7 @@ slint::slint! {
                         }
                         VerticalLayout {
                             horizontal-stretch: 1;
+                            preferred-width: 0;
                             spacing: 6px;
                             HorizontalLayout {
                                 spacing: 8px;
@@ -1243,6 +1262,7 @@ slint::slint! {
                                     font-size: 12px;
                                     vertical-alignment: center;
                                     horizontal-stretch: 1;
+                                    preferred-width: 0;
                                     overflow: elide;
                                 }
                                 Link { text: @tr("Treemap"); color: root.st-icicle ? Theme.dim : Theme.accent; clicked => { root.st-set-icicle(false); } }
@@ -1251,7 +1271,7 @@ slint::slint! {
                             MapView {
                                 vertical-stretch: 1;
                                 tiles: root.st-tiles;
-                                has-sel: root.st-has-sel;
+                                has-sel: root.st-map-sel;
                                 sel-x: root.st-sel-x;
                                 sel-y: root.st-sel-y;
                                 sel-w: root.st-sel-w;
@@ -1260,9 +1280,12 @@ slint::slint! {
                                 hover(x, y) => { return root.st-map-hover(x, y); }
                                 click(x, y) => { root.st-map-click(x, y); }
                                 zoom(x, y) => { root.st-map-zoom(x, y); }
+                                zoom-out => { root.st-up(); }
                             }
                             Text {
-                                text: @tr("Click to select, double-click to zoom in. Colours follow the file types in Extensions.");
+                                preferred-width: 0;
+                                overflow: elide;
+                                text: @tr("Click to select, double-click to zoom in, right-click to zoom out. Colours follow the file types in Extensions.");
                                 color: Theme.dim;
                                 font-size: 11px;
                             }
@@ -1274,9 +1297,10 @@ slint::slint! {
                             spacing: 12px;
                             VerticalLayout {
                                 horizontal-stretch: 1;
+                                preferred-width: 0;
                                 spacing: 2px;
-                                Text { text: root.st-sel-path; color: Theme.accent; overflow: elide; }
-                                Text { text: root.st-sel-detail; color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+                                Text { text: root.st-sel-path; color: Theme.accent; overflow: elide; preferred-width: 0; }
+                                Text { text: root.st-sel-detail; color: Theme.muted; font-size: 12px; wrap: word-wrap; preferred-width: 0; }
                             }
                             VerticalLayout {
                                 alignment: center;
@@ -1347,8 +1371,10 @@ slint::slint! {
                     HorizontalLayout {
                         spacing: 10px;
                         vertical-stretch: 1;
+                        // Fixed list width: the detail text must not resize the panels when
+                        // another category is picked.
                         Panel {
-                            horizontal-stretch: 1;
+                            width: 460px;
                             VerticalLayout {
                                 padding: 8px;
                                 ListView {
@@ -1361,7 +1387,7 @@ slint::slint! {
                                         }
                                         HorizontalLayout {
                                             padding-left: 6px;
-                                            padding-right: 6px;
+                                            padding-right: Theme.scrollbar-gap;
                                             spacing: 10px;
                                             Text {
                                                 width: 18px;
@@ -1395,10 +1421,12 @@ slint::slint! {
                         }
                         Panel {
                             horizontal-stretch: 1;
+                            preferred-width: 0;
                             VerticalLayout {
                                 padding: 12px;
                                 spacing: 8px;
                                 Text {
+                                    preferred-width: 0;
                                     text: root.cl-detail == "" ? @tr("Select a category to see what it contains, what happens after cleaning and how it is removed.") : root.cl-detail;
                                     color: root.cl-detail == "" ? Theme.dim : Theme.text;
                                     wrap: word-wrap;
@@ -1413,6 +1441,7 @@ slint::slint! {
                                         background: cand-touch.has-hover ? Theme.hover : transparent;
                                         cand-touch := TouchArea { mouse-cursor: pointer; clicked => { root.cl-toggle-file(i); } }
                                         HorizontalLayout {
+                                            padding-right: Theme.scrollbar-gap;
                                             spacing: 8px;
                                             Text { width: 16px; text: f.selected ? "☑" : "☐"; color: f.selected ? Theme.accent : Theme.muted; vertical-alignment: center; }
                                             Text { horizontal-stretch: 1; preferred-width: 0; text: f.path; color: Theme.text; overflow: elide; vertical-alignment: center; }
@@ -1472,6 +1501,7 @@ slint::slint! {
                                     }
                                     HorizontalLayout {
                                         padding-left: d.header ? 0px : 18px;
+                                        padding-right: Theme.scrollbar-gap;
                                         spacing: 8px;
                                         if !d.header : Text { width: 16px; text: d.marked ? "☑" : "☐"; color: d.marked ? Theme.warn : Theme.muted; vertical-alignment: center; }
                                         Text {

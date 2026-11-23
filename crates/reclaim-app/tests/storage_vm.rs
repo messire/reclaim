@@ -200,6 +200,57 @@ fn zoom_back_forward_and_icicle() {
 }
 
 #[test]
+fn map_double_click_zooms_one_level_at_a_time() {
+    let (mut s, _rx, _) = scanned();
+    s.set_map_size(300.0, 200.0);
+    s.tiles();
+    let id = |s: &mut reclaim_app::storage_vm::Storage, name: &str| {
+        s.list_rows();
+        let t = s.tree().read().unwrap();
+        (0..t.len() as u32)
+            .find(|&i| t.get(i).is_some_and(|n| n.live()) && t.name(i) == name)
+            .unwrap()
+    };
+    let movie = id(&mut s, "movie.mkv");
+    s.zoom_toward(movie);
+    assert_eq!(s.selection().zoom_path, "/r");
+    s.zoom_toward(movie);
+    assert_eq!(s.selection().zoom_path, "/r/b");
+    // Already in the file's folder: nothing deeper to zoom into.
+    s.zoom_toward(movie);
+    assert_eq!(s.selection().zoom_path, "/r/b");
+    // Outside the zoomed folder: no change.
+    let one = id(&mut s, "one.bin");
+    s.zoom_toward(one);
+    assert_eq!(s.selection().zoom_path, "/r/b");
+    s.back();
+    assert_eq!(s.selection().zoom_path, "/r");
+}
+
+#[test]
+fn selection_rectangle_follows_the_selection() {
+    let (mut s, _rx, _) = scanned();
+    s.set_map_size(300.0, 200.0);
+    s.tiles();
+    let b = s.tree_rows().iter().find(|r| r.name == "b").unwrap().id;
+    s.select(b);
+    let whole = s.selection_rect().expect("b has a cell");
+    s.zoom_in(b);
+    s.tiles();
+    let zoomed = s.selection_rect().expect("b is the zoomed folder");
+    assert_ne!(whole, zoomed);
+    let one = s
+        .tree_rows()
+        .iter()
+        .find(|r| r.name == "one.bin")
+        .map(|r| r.id);
+    if let Some(one) = one {
+        s.select(one);
+        assert_eq!(s.selection_rect(), None, "outside the zoomed folder");
+    }
+}
+
+#[test]
 fn search_runs_without_rescan() {
     let (mut s, rx, _) = scanned();
     let form = SearchForm {

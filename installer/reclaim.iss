@@ -74,6 +74,8 @@ english.Options=Options:
 russian.Options=Параметры:
 english.LaunchApp=Launch Reclaim
 russian.LaunchApp=Запустить Reclaim
+english.StillRunning=Reclaim is still running and setup cannot close it, probably because it was started as administrator. Close it (tray icon → Exit, or end reclaim.exe in Task Manager), then click Back and Next.
+russian.StillRunning=Reclaim всё ещё запущен, и установщик не может его закрыть — вероятно, он запущен от имени администратора. Закройте его (значок в трее → Exit или завершите reclaim.exe в диспетчере задач), затем нажмите «Назад» и «Далее».
 
 [Tasks]
 Name: "autostart"; Description: "{cm:AutostartTask}"; GroupDescription: "{cm:Options}"; Flags: unchecked
@@ -102,16 +104,55 @@ Root: HKCU; Subkey: "{#ApprovedKey}"; ValueType: none; ValueName: "{#RunValue}";
 Filename: "{app}\reclaim.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+const
+  GENERIC_WRITE = $40000000;
+  OPEN_EXISTING = 3;
+  INVALID_HANDLE_VALUE = -1;
+
+function CreateFileW(Name: String; Access, Share, Security, Disposition, Flags,
+  Template: Cardinal): Integer; external 'CreateFileW@kernel32.dll stdcall';
+function CloseHandle(Handle: Integer): Boolean; external 'CloseHandle@kernel32.dll stdcall';
+
+{ True when the file is missing or can be opened for writing. A running exe cannot: Windows
+  keeps its image locked until the process is gone. }
+function Released(const Path: String): Boolean;
+var
+  H: Integer;
+begin
+  Result := not FileExists(Path);
+  if not Result then
+  begin
+    H := CreateFileW(Path, GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0);
+    Result := H <> INVALID_HANDLE_VALUE;
+    if Result then
+      CloseHandle(H);
+  end;
+end;
+
 { Asks the current user's Reclaim (any copy, any version) to stop. Only processes of the
-  current user can be stopped without administrator rights, which is what we want. }
+  current user can be stopped without administrator rights; a copy started as administrator
+  survives, which Released() then reports. }
 procedure StopReclaim();
 var
   Code: Integer;
 begin
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM reclaim.exe /FI "USERNAME eq ' +
     GetUserNameString() + '"', '', SW_HIDE, ewWaitUntilTerminated, Code);
-  { taskkill returns before the process is fully gone; give Windows a moment to release files. }
-  Sleep(500);
+end;
+
+{ taskkill returns before the process is fully gone: wait up to 10 s for the exe to be free. }
+function WaitReleased(const Path: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Released(Path);
+  I := 0;
+  while (not Result) and (I < 40) do
+  begin
+    Sleep(250);
+    Result := Released(Path);
+    I := I + 1;
+  end;
 end;
 
 function PreviousDir(): String;
@@ -160,9 +201,15 @@ var
 begin
   Result := '';
   StopReclaim();
-  { Moving to another folder: remove the old copy so only one installation exists. }
   OldDir := PreviousDir();
   NewDir := ExpandConstant('{app}');
+  if not WaitReleased(AddBackslash(NewDir) + 'reclaim.exe') or
+     ((OldDir <> '') and not WaitReleased(AddBackslash(OldDir) + 'reclaim.exe')) then
+  begin
+    Result := CustomMessage('StillRunning');
+    Exit;
+  end;
+  { Moving to another folder: remove the old copy so only one installation exists. }
   Uninstaller := PreviousUninstaller();
   if (OldDir <> '') and (Uninstaller <> '') and FileExists(Uninstaller) and
      (CompareText(RemoveBackslashUnlessRoot(OldDir), RemoveBackslashUnlessRoot(NewDir)) <> 0) then
