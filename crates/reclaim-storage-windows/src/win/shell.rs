@@ -3,6 +3,9 @@
 use std::os::windows::process::CommandExt;
 
 use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, RECT};
+use windows_sys::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+};
 use windows_sys::Win32::Security::{
     GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
 };
@@ -92,15 +95,27 @@ unsafe extern "system" fn browse_callback(
         let mut d = o;
         // SAFETY: `dlg` is the live dialog the shell passed in; `owner` is either null
         // (GetWindowRect then fails and the dialog keeps its position) or a window
-        // checked by `hwnd`. The RECTs are writable locals.
+        // checked by `hwnd`. The RECTs and MONITORINFO (size set,
+        // all-zero otherwise valid) are writable locals.
         unsafe {
             if !owner.is_null()
                 && GetWindowRect(owner, &mut o) != 0
                 && GetWindowRect(dlg, &mut d) != 0
             {
-                let x = o.left + ((o.right - o.left) - (d.right - d.left)) / 2;
-                let y = o.top + ((o.bottom - o.top) - (d.bottom - d.top)) / 2;
-                SetWindowPos(dlg, HWND_TOP, x.max(o.left), y.max(o.top), 0, 0, SWP_NOSIZE);
+                let (w, h) = (d.right - d.left, d.bottom - d.top);
+                let mut x = o.left + ((o.right - o.left) - w) / 2;
+                let mut y = o.top + ((o.bottom - o.top) - h) / 2;
+                // Keep the whole dialog inside the work area of the owner's monitor,
+                // even when the owner is partly off-screen.
+                let mut mi: MONITORINFO = std::mem::zeroed();
+                mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+                let mon = MonitorFromWindow(owner, MONITOR_DEFAULTTONEAREST);
+                if GetMonitorInfoW(mon, &mut mi) != 0 {
+                    let a = mi.rcWork;
+                    x = x.min(a.right - w).max(a.left);
+                    y = y.min(a.bottom - h).max(a.top);
+                }
+                SetWindowPos(dlg, HWND_TOP, x, y, 0, 0, SWP_NOSIZE);
             } else {
                 SetWindowPos(dlg, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
             }
