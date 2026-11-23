@@ -29,7 +29,7 @@ Generated tree (`storage-bench --runs 3`): 20 000 files of 1–8 KiB in 417 fold
 |---|---|
 | Scan, 1 thread (median of 3) | 172.1 ms |
 | Scan, 4 threads (median of 3) | 77.3 ms |
-| Index memory | 9.8 MB for 100 792 nodes (≈ 97 bytes per entry); 6.5 MB (≈ 64 bytes) since 2026-11-23, see below |
+| Index memory | 9.8 MB for 100 792 nodes (≈ 97 bytes per entry); 6.5 MB (≈ 64 bytes per entry) since 2026-11-23, see below |
 | Treemap layout 1200×700 | 1.66 ms, 3 259 cells |
 | Search `*.log` | 30.4 ms |
 
