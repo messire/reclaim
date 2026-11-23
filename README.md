@@ -33,7 +33,7 @@ Reclaim is a lightweight, offline-first system utility for monitoring and reclai
 
 ## Storage (0.3.0)
 
-- **Disk usage:** scan drives or folders and see where the space goes: a directory tree with sizes and shares, a treemap or icicle view coloured by file type, the largest files and folders, extension statistics and a list of what could not be read. Search the results by name, path, extension, size or age without scanning again. Export to JSON or CSV.
+- **Disk usage:** scan drives or folders and see where the space goes: a directory tree with sizes and shares, a treemap or icicle view coloured by file type, the largest files and folders, extension statistics and a list of what could not be read. Search the results by name, path, extension, size or age without scanning again. Export to JSON (CSV from the CLI).
 - **Cleanup:** examine temporary files, caches, crash dumps, the Recycle Bin, old installers and large old downloads. Each category explains what it holds and what happens after cleaning. Nothing changes until you confirm; caches are deleted, your own files go to the Recycle Bin, and the report shows the estimate next to the free space Windows actually measured.
 - **Duplicates:** find identical files in the scanned area; you choose which copies go to the Recycle Bin, and one copy always stays.
 - Works without administrator rights. If you start Reclaim as administrator yourself, whole NTFS drives are read with a faster method.
