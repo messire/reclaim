@@ -11,6 +11,7 @@
 - Larger default window (1120×780).
 - Installer: waits until the running Reclaim has really exited before replacing files, and if a copy started as administrator is still running, says so instead of failing with "DeleteFile failed; code 5".
 - Lists: rows keep clear of the scroll bar; the Files column in the tree is wide enough for millions of files.
+- Disk usage: the map rectangle follows the selection (or the folder that contains it) and disappears when the selection is outside the zoomed folder; clicks and double-clicks in the tree are no longer lost when the list refreshes; selecting no longer rebuilds the map; the tree and map halves keep their width. Cleanup: the category list has a fixed width, so picking a category no longer resizes the panels.
 
 ## [0.2.0] — installer, simpler window
 - Installer (Inno Setup, per-user, no admin): choose the folder, optional start with Windows; a newer version replaces the installed one, never side by side. Built with `scripts\build-installer.cmd` from a fresh clone; the portable zip stays. CI tests install, upgrade, move and uninstall.

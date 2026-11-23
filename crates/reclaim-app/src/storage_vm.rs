@@ -1596,10 +1596,10 @@ impl Storage {
         if pos >= cap {
             self.more.insert(parent, pos + 1);
         }
+        // The map itself does not change; only the selection rectangle does.
         StorageDirty {
             tree: true,
             selection: true,
-            map: true,
             ..StorageDirty::default()
         }
     }
@@ -2251,13 +2251,19 @@ impl Storage {
         tiles
     }
 
-    /// Rectangle of the selection in the last built map.
+    /// Rectangle of the selection in the last built map. A selection too small to have its
+    /// own cell is shown by the nearest enclosing cell; a selection outside the zoomed
+    /// directory has no rectangle.
     pub fn selection_rect(&self) -> Option<(f32, f32, f32, f32)> {
         let s = self.selected?;
-        self.cells
-            .iter()
-            .find(|c| c.node == s && !c.rest)
-            .map(|c| (c.rect.x, c.rect.y, c.rect.w, c.rect.h))
+        let t = read(&self.tree);
+        t.get(s).filter(|n| n.live())?;
+        std::iter::once(s).chain(t.ancestors(s)).find_map(|a| {
+            self.cells
+                .iter()
+                .find(|c| c.node == a && !c.rest)
+                .map(|c| (c.rect.x, c.rect.y, c.rect.w, c.rect.h))
+        })
     }
 
     /// Selection details.

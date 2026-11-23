@@ -718,6 +718,9 @@ slint::slint! {
         in property <int> st-tree-serial;
         in property <[Tile]> st-tiles;
         in property <bool> st-has-sel;
+        // The selection has a rectangle on the current map (separate from `st-has-sel`,
+        // which says something is selected at all).
+        in property <bool> st-map-sel;
         in property <float> st-sel-x;
         in property <float> st-sel-y;
         in property <float> st-sel-w;
@@ -1225,8 +1228,11 @@ slint::slint! {
                     HorizontalLayout {
                         spacing: 10px;
                         vertical-stretch: 1;
+                        // Both halves take half the width whatever they show (preferred-width 0),
+                        // so selecting or zooming never resizes the map.
                         TreeView {
                             horizontal-stretch: 1;
+                            preferred-width: 0;
                             rows: root.st-tree;
                             scroll-to: root.st-tree-scroll;
                             scroll-serial: root.st-tree-serial;
@@ -1237,6 +1243,7 @@ slint::slint! {
                         }
                         VerticalLayout {
                             horizontal-stretch: 1;
+                            preferred-width: 0;
                             spacing: 6px;
                             HorizontalLayout {
                                 spacing: 8px;
@@ -1249,6 +1256,7 @@ slint::slint! {
                                     font-size: 12px;
                                     vertical-alignment: center;
                                     horizontal-stretch: 1;
+                                    preferred-width: 0;
                                     overflow: elide;
                                 }
                                 Link { text: @tr("Treemap"); color: root.st-icicle ? Theme.dim : Theme.accent; clicked => { root.st-set-icicle(false); } }
@@ -1257,7 +1265,7 @@ slint::slint! {
                             MapView {
                                 vertical-stretch: 1;
                                 tiles: root.st-tiles;
-                                has-sel: root.st-has-sel;
+                                has-sel: root.st-map-sel;
                                 sel-x: root.st-sel-x;
                                 sel-y: root.st-sel-y;
                                 sel-w: root.st-sel-w;
@@ -1268,6 +1276,8 @@ slint::slint! {
                                 zoom(x, y) => { root.st-map-zoom(x, y); }
                             }
                             Text {
+                                preferred-width: 0;
+                                overflow: elide;
                                 text: @tr("Click to select, double-click to zoom in. Colours follow the file types in Extensions.");
                                 color: Theme.dim;
                                 font-size: 11px;
@@ -1280,9 +1290,10 @@ slint::slint! {
                             spacing: 12px;
                             VerticalLayout {
                                 horizontal-stretch: 1;
+                                preferred-width: 0;
                                 spacing: 2px;
-                                Text { text: root.st-sel-path; color: Theme.accent; overflow: elide; }
-                                Text { text: root.st-sel-detail; color: Theme.muted; font-size: 12px; wrap: word-wrap; }
+                                Text { text: root.st-sel-path; color: Theme.accent; overflow: elide; preferred-width: 0; }
+                                Text { text: root.st-sel-detail; color: Theme.muted; font-size: 12px; wrap: word-wrap; preferred-width: 0; }
                             }
                             VerticalLayout {
                                 alignment: center;
@@ -1353,8 +1364,10 @@ slint::slint! {
                     HorizontalLayout {
                         spacing: 10px;
                         vertical-stretch: 1;
+                        // Fixed list width: the detail text must not resize the panels when
+                        // another category is picked.
                         Panel {
-                            horizontal-stretch: 1;
+                            width: 460px;
                             VerticalLayout {
                                 padding: 8px;
                                 ListView {
@@ -1401,10 +1414,12 @@ slint::slint! {
                         }
                         Panel {
                             horizontal-stretch: 1;
+                            preferred-width: 0;
                             VerticalLayout {
                                 padding: 12px;
                                 spacing: 8px;
                                 Text {
+                                    preferred-width: 0;
                                     text: root.cl-detail == "" ? @tr("Select a category to see what it contains, what happens after cleaning and how it is removed.") : root.cl-detail;
                                     color: root.cl-detail == "" ? Theme.dim : Theme.text;
                                     wrap: word-wrap;
