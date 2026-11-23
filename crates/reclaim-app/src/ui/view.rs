@@ -106,6 +106,7 @@ slint::slint! {
         out property <color> track: #14202a;
         out property <color> amber: #c9a86a;
         out property <color> warn: #e0a458;
+        out property <color> ok: #6fd38a;
         out property <color> error: #f0766e;
         out property <color> hover: #ffffff0a;
         // Memory-in-use bar: teal while there is room, amber, then red near full.
@@ -354,6 +355,38 @@ slint::slint! {
             enabled: root.enabled;
             mouse-cursor: pointer;
             clicked => { root.clicked(); }
+        }
+    }
+
+    // Scan state lamp: grey before the first scan, a pulsing amber ring while scanning,
+    // steady amber when paused or cancelled, green when the scan is done. The words are
+    // in the status bar.
+    component StatusLamp inherits Rectangle {
+        // 0 never scanned, 1 scanning, 2 paused, 3 done, 4 cancelled.
+        in property <int> state;
+        private property <color> c: root.state == 3 ? Theme.ok : root.state == 0 ? Theme.dim : Theme.warn;
+        private property <float> phase: root.state == 1 ? Math.mod(animation-tick() / 1ms, 1200) / 1200 : 0;
+        width: 28px;
+        height: 28px;
+        if root.state == 1 : Rectangle {
+            width: 10px + 16px * root.phase;
+            height: self.width;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: self.width / 2;
+            border-width: 2px;
+            border-color: root.c;
+            opacity: 1 - root.phase;
+        }
+        Rectangle {
+            width: 10px;
+            height: 10px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 5px;
+            background: root.state == 0 ? transparent : root.c;
+            border-width: root.state == 0 ? 2px : 0px;
+            border-color: root.c;
         }
     }
 
@@ -713,6 +746,7 @@ slint::slint! {
         in-out property <int> st-drive-index: 0;
         in-out property <string> st-folders;
         in property <string> st-status;
+        in property <bool> st-cancelled;
         in property <bool> st-scanning;
         in property <bool> st-paused;
         in property <bool> st-can-pause;
@@ -1204,6 +1238,12 @@ slint::slint! {
                     }
                     HorizontalLayout {
                         spacing: 10px;
+                        StatusLamp {
+                            y: (parent.height - self.height) / 2;
+                            state: root.st-scanning ? (root.st-paused ? 2 : 1)
+                                : !root.st-has-index ? 0
+                                : root.st-cancelled ? 4 : 3;
+                        }
                         if root.st-scanning && root.st-can-pause : FlatButton {
                             text: root.st-paused ? @tr("Resume") : @tr("Pause");
                             clicked => { root.st-pause(!root.st-paused); }

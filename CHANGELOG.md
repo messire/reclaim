@@ -13,6 +13,7 @@
 - Lists: rows keep clear of the scroll bar; the Files column in the tree is wide enough for millions of files.
 - Disk usage: the map rectangle follows the selection (or the folder that contains it) and disappears when the selection is outside the zoomed folder; clicks and double-clicks in the tree are no longer lost when the list refreshes; selecting no longer rebuilds the map; the tree and map halves keep their width. Cleanup: the category list has a fixed width, so picking a category no longer resizes the panels.
 - Treemap and icicle: the cell budget goes to the largest folders first, so a big folder such as Users is always subdivided instead of being drawn as one solid block. Double-click on the map zooms one level deeper toward the click; right-click zooms out.
+- Disk usage: a status lamp starts the button row (grey before the first scan, pulsing amber while scanning, steady amber when paused or cancelled, green when done); the scan line moved to the status bar; "Watch for changes" has its own row.
 
 ## [0.2.0] — installer, simpler window
 - Installer (Inno Setup, per-user, no admin): choose the folder, optional start with Windows; a newer version replaces the installed one, never side by side. Built with `scripts\build-installer.cmd` from a fresh clone; the portable zip stays. CI tests install, upgrade, move and uninstall.
