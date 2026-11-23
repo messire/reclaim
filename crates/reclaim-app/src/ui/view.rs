@@ -1216,20 +1216,17 @@ slint::slint! {
                         }
                         FlatButton { text: @tr("Export JSON…"); enabled: root.st-has-index && !root.st-scanning; clicked => { root.st-export(false); } }
                         FlatButton { text: @tr("Export CSV…"); enabled: root.st-has-index && !root.st-scanning; clicked => { root.st-export(true); } }
+                        Rectangle { horizontal-stretch: 1; }
+                    }
+                    // The scan progress and result are in the status bar.
+                    HorizontalLayout {
                         CheckBox {
                             text: @tr("Watch for changes");
                             checked <=> root.st-watch;
                             enabled: root.st-has-index;
                             toggled => { root.st-set-watch(self.checked); }
                         }
-                        Text {
-                            text: root.st-status;
-                            color: root.st-partial ? Theme.warn : Theme.muted;
-                            font-size: 12px;
-                            vertical-alignment: center;
-                            horizontal-stretch: 1;
-                            overflow: elide;
-                        }
+                        Rectangle { horizontal-stretch: 1; }
                     }
                     HorizontalLayout {
                         spacing: 10px;
@@ -1581,6 +1578,19 @@ slint::slint! {
                         vertical-alignment: center;
                         overflow: elide;
                         horizontal-stretch: 1;
+                        preferred-width: 0;
+                    }
+                    // Disk scan progress or result: always on Disk usage, elsewhere only
+                    // while a scan runs.
+                    if root.st-status != "" && (root.page == 4 || root.st-scanning) : Text {
+                        text: root.st-status;
+                        font-size: 12px;
+                        color: root.st-partial ? Theme.warn : Theme.muted;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        overflow: elide;
+                        horizontal-stretch: 2;
+                        preferred-width: 0;
                     }
                     if root.can-cancel : Text {
                         text: @tr("Cancel").to-uppercase();
