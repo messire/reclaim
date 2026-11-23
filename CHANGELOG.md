@@ -2,7 +2,7 @@
 
 Versions follow the rule in [README → Versioning](README.md#versioning): patch for fixes only, minor for new features (and, while 0.x, breaking changes), major from 1.0.0 for breaking changes.
 
-## [Unreleased]
+## [0.3.1] — folder dialog fix
 - Disk usage: the *Browse…* folder dialog opens centred over the window and in front of it; before, it could open behind the window and the app looked frozen.
 
 ## [0.3.0] — storage analyzer and cleaner
