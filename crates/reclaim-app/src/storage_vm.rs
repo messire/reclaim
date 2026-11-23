@@ -1596,10 +1596,10 @@ impl Storage {
         if pos >= cap {
             self.more.insert(parent, pos + 1);
         }
+        // The map itself does not change; only the selection rectangle does.
         StorageDirty {
             tree: true,
             selection: true,
-            map: true,
             ..StorageDirty::default()
         }
     }
@@ -1672,6 +1672,26 @@ impl Storage {
                 }
             }
             _ => StorageDirty::default(),
+        }
+    }
+
+    /// Zooms the map one level deeper, into the folder of the current view that contains
+    /// `id` (a double-click on the map). A file directly in the view does not zoom.
+    pub fn zoom_toward(&mut self, id: NodeId) -> StorageDirty {
+        let target = {
+            let t = read(&self.tree);
+            if t.get(id).is_none_or(|n| !n.live()) {
+                None
+            } else {
+                std::iter::once(id)
+                    .chain(t.ancestors(id))
+                    .find(|&a| t.node(a).parent == self.zoom)
+                    .filter(|&a| t.node(a).is_dir())
+            }
+        };
+        match target {
+            Some(z) => self.zoom_in(z),
+            None => StorageDirty::default(),
         }
     }
 
@@ -2251,13 +2271,19 @@ impl Storage {
         tiles
     }
 
-    /// Rectangle of the selection in the last built map.
+    /// Rectangle of the selection in the last built map. A selection too small to have its
+    /// own cell is shown by the nearest enclosing cell; a selection outside the zoomed
+    /// directory has no rectangle.
     pub fn selection_rect(&self) -> Option<(f32, f32, f32, f32)> {
         let s = self.selected?;
-        self.cells
-            .iter()
-            .find(|c| c.node == s && !c.rest)
-            .map(|c| (c.rect.x, c.rect.y, c.rect.w, c.rect.h))
+        let t = read(&self.tree);
+        t.get(s).filter(|n| n.live())?;
+        std::iter::once(s).chain(t.ancestors(s)).find_map(|a| {
+            self.cells
+                .iter()
+                .find(|c| c.node == a && !c.rest)
+                .map(|c| (c.rect.x, c.rect.y, c.rect.w, c.rect.h))
+        })
     }
 
     /// Selection details.

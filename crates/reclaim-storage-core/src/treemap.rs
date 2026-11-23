@@ -7,7 +7,40 @@
 //!
 //! Squarified layout: Bruls, Huizing, van Wijk, "Squarified Treemaps" (2000).
 
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
+
 use crate::tree::{NodeId, SizeBasis, Tree};
+
+/// Work list that hands out the largest pending item first, so the cell budget is spent
+/// on the biggest rectangles: a large directory is always subdivided before a small one.
+/// Ties keep insertion order, so layouts are deterministic.
+struct Largest<T> {
+    heap: BinaryHeap<(u32, Reverse<usize>)>,
+    items: Vec<Option<T>>,
+}
+
+impl<T> Largest<T> {
+    fn new() -> Self {
+        Self {
+            heap: BinaryHeap::new(),
+            items: Vec::new(),
+        }
+    }
+
+    /// `weight` must be finite and non-negative (an area or a width).
+    fn push(&mut self, weight: f32, item: T) {
+        let i = self.items.len();
+        self.items.push(Some(item));
+        // Non-negative floats order like their bit patterns.
+        self.heap.push((weight.max(0.0).to_bits(), Reverse(i)));
+    }
+
+    fn pop(&mut self) -> Option<T> {
+        let (_, Reverse(i)) = self.heap.pop()?;
+        self.items[i].take()
+    }
+}
 
 /// Axis-aligned rectangle in logical pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -163,7 +196,8 @@ pub fn treemap(t: &Tree, root: NodeId, area: Rect, o: &LayoutOptions) -> Vec<Cel
     if area.area() <= 0.0 || t.node(root).size(o.basis) == 0 {
         return cells;
     }
-    let mut stack = vec![(root, area, 0u16)];
+    let mut stack = Largest::new();
+    stack.push(area.area(), (root, area, 0u16));
     while let Some((dir, rect, depth)) = stack.pop() {
         let n = t.node(dir);
         let kids = if n.is_dir() {
@@ -218,7 +252,7 @@ pub fn treemap(t: &Tree, root: NodeId, area: Rect, o: &LayoutOptions) -> Vec<Cel
         let rects = squarify(&areas, inner);
         for (i, r) in rects.into_iter().enumerate() {
             if i < keep {
-                stack.push((kids[i].0, r, depth + 1));
+                stack.push(r.area(), (kids[i].0, r, depth + 1));
             } else {
                 cells.push(Cell {
                     rect: r,
@@ -242,7 +276,8 @@ pub fn icicle(t: &Tree, root: NodeId, area: Rect, row_h: f32, o: &LayoutOptions)
     }
     let levels = ((area.h / row_h).floor() as u16).max(1);
     let min_w = (o.min_area / row_h).max(1.0);
-    let mut stack = vec![(root, area.x, area.w, 0u16)];
+    let mut stack = Largest::new();
+    stack.push(area.w, (root, area.x, area.w, 0u16));
     while let Some((id, x, w, depth)) = stack.pop() {
         let n = t.node(id);
         let kids = if n.is_dir() && depth + 1 < levels.min(o.max_depth + 1) {
@@ -270,7 +305,7 @@ pub fn icicle(t: &Tree, root: NodeId, area: Rect, row_h: f32, o: &LayoutOptions)
                 rest += cw;
                 continue;
             }
-            stack.push((c, cx as f32, cw as f32, depth + 1));
+            stack.push(cw as f32, (c, cx as f32, cw as f32, depth + 1));
             cx += cw;
         }
         if rest >= 1.0 {
@@ -414,6 +449,45 @@ mod tests {
         let one = treemap(&t, r, Rect::new(0.0, 0.0, 200.0, 100.0), &shallow);
         assert_eq!(one.len(), 1);
         assert!(one[0].leaf);
+    }
+
+    #[test]
+    fn cell_budget_goes_to_the_largest_directories_first() {
+        // One big directory with many files next to many small directories: with a tight
+        // budget the big one must still be subdivided (it used to be laid out last).
+        let mut t = Tree::new(PathStyle::Posix);
+        let r = t.set_roots(&[EntryMeta::dir("/r")])[0];
+        let mut top = vec![EntryMeta::dir("big")];
+        for i in 0..40 {
+            top.push(EntryMeta::dir(&format!("small{i}")));
+        }
+        let ids = t.fill_dir(r, &top);
+        let big = ids[0];
+        let files: Vec<EntryMeta> = (0..50)
+            .map(|i| EntryMeta::file(&format!("f{i}"), 1_000_000))
+            .collect();
+        t.fill_dir(big, &files);
+        for &d in &ids[1..] {
+            let small: Vec<EntryMeta> = (0..20)
+                .map(|i| EntryMeta::file(&format!("g{i}"), 10_000))
+                .collect();
+            t.fill_dir(d, &small);
+        }
+        let o = LayoutOptions {
+            basis: SizeBasis::Logical,
+            min_area: 1.0,
+            max_cells: 80,
+            ..LayoutOptions::default()
+        };
+        let cells = treemap(&t, r, Rect::new(0.0, 0.0, 800.0, 600.0), &o);
+        let big_cell = cells.iter().find(|c| c.node == big && !c.rest).unwrap();
+        assert!(!big_cell.leaf, "largest directory was not subdivided");
+        let icicle_cells = icicle(&t, r, Rect::new(0.0, 0.0, 800.0, 100.0), 20.0, &o);
+        let big_bar = icicle_cells.iter().find(|c| c.node == big).unwrap();
+        assert!(
+            !big_bar.leaf,
+            "largest directory was not expanded in the icicle"
+        );
     }
 
     #[test]
