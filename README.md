@@ -77,6 +77,16 @@ Further documents:
   - [Architecture decision records](docs/adr/)
   - [Manual test checklist](docs/testing/MANUAL_CHECKLIST.md)
 
+## Versioning
+
+Versions are `X.Y.Z` ([SemVer](https://semver.org)). A release bumps the most significant part that applies to the changes since the previous release:
+
+- **Z (patch)**: fixes only. No new features, and no change to the format of settings or history files (`settings.toml`, `storage.toml`, `history.jsonl`, `cleanup-history.jsonl`).
+- **Y (minor)**: a new feature or tab. While the version is 0.x, also any breaking change: settings or history format, CLI commands and options, default behaviour.
+- **X (major)**: 1.0.0 is set when the owner declares the product stable. After that, X goes up only for breaking changes, and new features go to Y.
+
+Changes collect under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md); a release renames that heading to the new version.
+
 ## Building
 
 Requires the Rust toolchain pinned in `rust-toolchain.toml` (installed automatically by `rustup`).
