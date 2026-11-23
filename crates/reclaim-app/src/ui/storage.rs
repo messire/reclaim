@@ -490,17 +490,13 @@ pub(super) fn wire(w: &MainWindow) {
     w.on_st_cancel(|| st(Storage::cancel_scan));
     w.on_st_refresh(|| st(Storage::refresh));
     let weak = w.as_weak();
-    w.on_st_export(move |csv| {
+    // The window exports JSON only; CSV stays in the CLI (`storage scan --csv`).
+    w.on_st_export(move || {
         let Some(w) = weak.upgrade() else { return };
-        let (desc, ext) = if csv {
-            ("CSV files", "csv")
-        } else {
-            ("JSON files", "json")
-        };
         if let Some(path) =
-            shell::save_file_dialog(hwnd(&w), &format!("reclaim-scan.{ext}"), desc, ext)
+            shell::save_file_dialog(hwnd(&w), "reclaim-scan.json", "JSON files", "json")
         {
-            st(|s| s.export(path, csv));
+            st(|s| s.export(path, false));
         }
     });
     w.on_st_set_watch(|on| {

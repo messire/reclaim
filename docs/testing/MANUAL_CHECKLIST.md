@@ -78,7 +78,7 @@ Record the build, VM, date and the result of each line (✓, ✗ with a note, or
 | 36 | Select `C:\Windows` or a drive root | Recycle… is disabled | §5 |
 | 37 | Search `*.log`, min size `10 MB` | Results appear without rescanning; clicking one selects it in tree and map | §5 |
 | 38 | Errors tab after scanning C: unelevated | Lists access-denied folders (e.g. `System Volume Information`) | §5 |
-| 39 | Export JSON and CSV, open them | JSON parses; both state whether the scan was complete and list unreadable folders; CSV opens in a spreadsheet with no formulas executed | §5 |
+| 39 | Export JSON in the window and CSV with `reclaim-cli storage scan <path> --csv FILE`, open them | JSON parses; both state whether the scan was complete and list unreadable folders; CSV opens in a spreadsheet with no formulas executed | §5 |
 | 40 | Cleanup → Examine | Each category shows a size or "not examined"; nothing is deleted | §5 |
 | 41 | Select Temporary files, Clean selected… | Confirmation says the files are deleted permanently; report shows deleted, skipped (in use) and the measured free-space change | §5 |
 | 42 | Old installers: tick two files only, clean | Only those two files are in the Recycle Bin | §5 |

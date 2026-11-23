@@ -248,6 +248,92 @@ slint::slint! {
         }
     }
 
+    // Two-state mode switch: a label on each side of a small track, the knob sits under
+    // the current mode and that label is lit. Each side has its own colour (left accent,
+    // right amber), so the switch reads as "which one", not as on/off. Clicking a label
+    // picks that side; clicking the track flips it.
+    component ModeSwitch {
+        in property <string> left;
+        in property <string> right;
+        in-out property <bool> on-right;
+        private property <color> lit: root.on-right ? Theme.amber : Theme.accent;
+        min-height: 32px;
+        horizontal-stretch: 0;
+        vertical-stretch: 0;
+        accessible-role: switch;
+        accessible-checked: root.on-right;
+        accessible-label: root.on-right ? root.right : root.left;
+
+        focus := FocusScope {
+            key-pressed(e) => {
+                if (e.text == Key.Return || e.text == Key.Space) {
+                    root.on-right = !root.on-right;
+                    return accept;
+                }
+                if (e.text == Key.LeftArrow) { root.on-right = false; return accept; }
+                if (e.text == Key.RightArrow) { root.on-right = true; return accept; }
+                return reject;
+            }
+        }
+        Rectangle {
+            border-width: 1px;
+            border-radius: 3px;
+            border-color: focus.has-focus || touch.has-hover ? Theme.muted : Theme.line;
+            background: touch.has-hover ? Theme.hover : transparent;
+        }
+        HorizontalLayout {
+            padding-left: 14px;
+            padding-right: 14px;
+            spacing: 10px;
+            Text {
+                text: root.left.to-uppercase();
+                letter-spacing: 1px;
+                vertical-alignment: center;
+                color: root.on-right ? Theme.dim : Theme.accent;
+                animate color { duration: 150ms; }
+            }
+            track := Rectangle {
+                width: 40px;
+                height: 18px;
+                y: (parent.height - self.height) / 2;
+                border-radius: 9px;
+                border-width: 1px;
+                border-color: root.lit;
+                background: root.lit.with-alpha(0.14);
+                animate border-color, background { duration: 150ms; }
+                Rectangle {
+                    width: 12px;
+                    height: 12px;
+                    y: 3px;
+                    x: root.on-right ? parent.width - self.width - 3px : 3px;
+                    border-radius: 6px;
+                    background: root.lit;
+                    animate x, background { duration: 150ms; easing: ease-out; }
+                }
+            }
+            Text {
+                text: root.right.to-uppercase();
+                letter-spacing: 1px;
+                vertical-alignment: center;
+                color: root.on-right ? Theme.amber : Theme.dim;
+                animate color { duration: 150ms; }
+            }
+        }
+        touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                focus.focus();
+                if (self.mouse-x < track.x) {
+                    root.on-right = false;
+                } else if (self.mouse-x > track.x + track.width) {
+                    root.on-right = true;
+                } else {
+                    root.on-right = !root.on-right;
+                }
+            }
+        }
+    }
+
     component TabItem {
         in property <string> text;
         in property <bool> active;
@@ -745,6 +831,8 @@ slint::slint! {
         in property <[DriveItem]> st-drives;
         in-out property <int> st-drive-index: 0;
         in-out property <string> st-folders;
+        // Disk usage source: false = a whole drive, true = folders.
+        in-out property <bool> st-folder-mode;
         in property <string> st-status;
         in property <bool> st-cancelled;
         in property <bool> st-scanning;
@@ -793,7 +881,7 @@ slint::slint! {
         callback st-pause(bool);
         callback st-cancel();
         callback st-refresh();
-        callback st-export(bool);
+        callback st-export();
         callback st-set-watch(bool);
         callback st-select(int);
         callback st-toggle(int);
@@ -1217,30 +1305,50 @@ slint::slint! {
                 // Disk usage.
                 if root.page == 4 : VerticalLayout {
                     spacing: 8px;
+                    // Source: Disk or Folder. Only the controls of the chosen mode are shown.
                     HorizontalLayout {
                         spacing: 10px;
-                        ComboBox {
-                            model: root.st-drive-titles;
-                            current-index <=> root.st-drive-index;
-                            min-width: 260px;
-                            horizontal-stretch: 0;
-                            enabled: !root.st-scanning;
+                        ModeSwitch {
+                            left: @tr("Disk");
+                            right: @tr("Folder");
+                            on-right <=> root.st-folder-mode;
                         }
-                        FlatButton {
-                            text: @tr("Scan drive");
-                            primary: true;
-                            enabled: !root.st-scanning && root.st-drive-titles.length > 0;
-                            clicked => { root.st-scan-drive(root.st-drive-index); }
-                        }
-                        LineEdit {
-                            text <=> root.st-folders;
-                            placeholder-text: @tr("Folders to scan, separated by ;");
+                        if !root.st-folder-mode : HorizontalLayout {
+                            spacing: 10px;
                             horizontal-stretch: 1;
-                            enabled: !root.st-scanning;
-                            accepted => { root.st-scan-folders(); }
+                            ComboBox {
+                                model: root.st-drive-titles;
+                                current-index <=> root.st-drive-index;
+                                min-width: 260px;
+                                horizontal-stretch: 0;
+                                enabled: !root.st-scanning;
+                            }
+                            FlatButton {
+                                text: @tr("Scan drive");
+                                primary: true;
+                                enabled: !root.st-scanning && root.st-drive-titles.length > 0;
+                                clicked => { root.st-scan-drive(root.st-drive-index); }
+                            }
+                            Rectangle { horizontal-stretch: 1; }
                         }
-                        FlatButton { text: @tr("Browse…"); enabled: !root.st-scanning; clicked => { root.st-browse(); } }
-                        FlatButton { text: @tr("Scan folders"); enabled: !root.st-scanning && root.st-folders != ""; clicked => { root.st-scan-folders(); } }
+                        if root.st-folder-mode : HorizontalLayout {
+                            spacing: 10px;
+                            horizontal-stretch: 1;
+                            LineEdit {
+                                text <=> root.st-folders;
+                                placeholder-text: @tr("Folders to scan, separated by ;");
+                                horizontal-stretch: 1;
+                                enabled: !root.st-scanning;
+                                accepted => { root.st-scan-folders(); }
+                            }
+                            FlatButton { text: @tr("Browse…"); enabled: !root.st-scanning; clicked => { root.st-browse(); } }
+                            FlatButton {
+                                text: @tr("Scan folders");
+                                primary: true;
+                                enabled: !root.st-scanning && root.st-folders != "";
+                                clicked => { root.st-scan-folders(); }
+                            }
+                        }
                     }
                     HorizontalLayout {
                         spacing: 10px;
@@ -1260,8 +1368,7 @@ slint::slint! {
                             enabled: root.st-has-index && !root.st-scanning;
                             clicked => { root.st-refresh(); }
                         }
-                        FlatButton { text: @tr("Export JSON…"); enabled: root.st-has-index && !root.st-scanning; clicked => { root.st-export(false); } }
-                        FlatButton { text: @tr("Export CSV…"); enabled: root.st-has-index && !root.st-scanning; clicked => { root.st-export(true); } }
+                        FlatButton { text: @tr("Export JSON…"); enabled: root.st-has-index && !root.st-scanning; clicked => { root.st-export(); } }
                         Rectangle { horizontal-stretch: 1; }
                     }
                     // The scan progress and result are in the status bar.
