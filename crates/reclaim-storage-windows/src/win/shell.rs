@@ -2,7 +2,10 @@
 
 use std::os::windows::process::CommandExt;
 
-use windows_sys::Win32::Foundation::{HANDLE, HWND};
+use windows_sys::Win32::Foundation::{HANDLE, HWND, LPARAM, RECT};
+use windows_sys::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+};
 use windows_sys::Win32::Security::{
     GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
 };
@@ -13,11 +16,16 @@ use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken}
 use windows_sys::Win32::UI::Controls::Dialogs::{
     GetSaveFileNameW, OFN_NOCHANGEDIR, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OPENFILENAMEW,
 };
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetActiveWindow;
 use windows_sys::Win32::UI::Shell::{
-    BIF_NEWDIALOGSTYLE, BIF_RETURNONLYFSDIRS, BROWSEINFOW, GPFIDL_DEFAULT, SEE_MASK_INVOKEIDLIST,
-    SHBrowseForFolderW, SHELLEXECUTEINFOW, SHGetPathFromIDListEx, ShellExecuteExW,
+    BFFM_INITIALIZED, BIF_NEWDIALOGSTYLE, BIF_RETURNONLYFSDIRS, BROWSEINFOW, GPFIDL_DEFAULT,
+    SEE_MASK_INVOKEIDLIST, SHBrowseForFolderW, SHELLEXECUTEINFOW, SHGetPathFromIDListEx,
+    ShellExecuteExW,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOW;
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    GetWindowRect, HWND_TOP, IsWindow, SW_SHOW, SWP_NOMOVE, SWP_NOSIZE, SetForegroundWindow,
+    SetWindowPos,
+};
 
 use super::{Handle, from_wide, last_error, wide};
 
@@ -53,8 +61,68 @@ impl Drop for Com {
     }
 }
 
+/// The owner for a dialog: the given window if it is a live window, otherwise the
+/// active window of the calling thread, so a dialog is never left without an owner
+/// (an unowned dialog can open behind the app window and look like a hang).
 fn hwnd(owner: isize) -> HWND {
-    owner as HWND
+    let h = owner as HWND;
+    // SAFETY: IsWindow accepts any value; GetActiveWindow has no preconditions.
+    unsafe {
+        if !h.is_null() && IsWindow(h) != 0 {
+            h
+        } else {
+            GetActiveWindow()
+        }
+    }
+}
+
+/// `SHBrowseForFolderW` callback: once the dialog exists, centre it over its owner
+/// (passed in `data`) and bring it to the front, so it never opens behind the app.
+unsafe extern "system" fn browse_callback(
+    dlg: HWND,
+    msg: u32,
+    _param: LPARAM,
+    data: LPARAM,
+) -> i32 {
+    if msg == BFFM_INITIALIZED {
+        let owner = data as HWND;
+        let mut o = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        let mut d = o;
+        // SAFETY: `dlg` is the live dialog the shell passed in; `owner` is either null
+        // (GetWindowRect then fails and the dialog keeps its position) or a window
+        // checked by `hwnd`. The RECTs and MONITORINFO (size set,
+        // all-zero otherwise valid) are writable locals.
+        unsafe {
+            if !owner.is_null()
+                && GetWindowRect(owner, &mut o) != 0
+                && GetWindowRect(dlg, &mut d) != 0
+            {
+                let (w, h) = (d.right - d.left, d.bottom - d.top);
+                let mut x = o.left + ((o.right - o.left) - w) / 2;
+                let mut y = o.top + ((o.bottom - o.top) - h) / 2;
+                // Keep the whole dialog inside the work area of the owner's monitor,
+                // even when the owner is partly off-screen.
+                let mut mi: MONITORINFO = std::mem::zeroed();
+                mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+                let mon = MonitorFromWindow(owner, MONITOR_DEFAULTTONEAREST);
+                if GetMonitorInfoW(mon, &mut mi) != 0 {
+                    let a = mi.rcWork;
+                    x = x.min(a.right - w).max(a.left);
+                    y = y.min(a.bottom - h).max(a.top);
+                }
+                SetWindowPos(dlg, HWND_TOP, x, y, 0, 0, SWP_NOSIZE);
+            } else {
+                SetWindowPos(dlg, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+            }
+            SetForegroundWindow(dlg);
+        }
+    }
+    0
 }
 
 /// Opens Explorer with `path` selected.
@@ -125,14 +193,15 @@ pub fn pick_folder(owner: isize, title: &str) -> Option<String> {
     let _com = Com::init();
     let title = wide(title);
     let mut display = vec![0u16; 260];
+    let owner = hwnd(owner);
     let bi = BROWSEINFOW {
-        hwndOwner: hwnd(owner),
+        hwndOwner: owner,
         pidlRoot: std::ptr::null_mut(),
         pszDisplayName: display.as_mut_ptr(),
         lpszTitle: title.as_ptr(),
         ulFlags: BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE,
-        lpfn: None,
-        lParam: 0,
+        lpfn: Some(browse_callback),
+        lParam: owner as LPARAM,
         iImage: 0,
     };
     // SAFETY: `bi` is fully initialized; the display buffer holds MAX_PATH characters

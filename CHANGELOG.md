@@ -2,6 +2,9 @@
 
 Versions follow the rule in [README → Versioning](README.md#versioning): patch for fixes only, minor for new features (and, while 0.x, breaking changes), major from 1.0.0 for breaking changes.
 
+## [0.3.1] — folder dialog fix
+- Disk usage: the *Browse…* folder dialog opens centred over the window and in front of it; before, it could open behind the window and the app looked frozen.
+
 ## [0.3.0] — storage analyzer and cleaner
 - Disk usage tab: scan drives or folders (several at once) with progress, pause, resume and cancel; partial results stay and are marked. Directory tree with logical and on-disk size, share of parent and total, file and folder counts. Squarified treemap and icicle view coloured by file type, hover details, click to select, double-click to zoom, back, forward, up. Largest files and folders, extension statistics, list of unreadable locations. Search by name, path, extension, size, age and type (text, `*.glob` or `/regex/`) without rescanning. Open in Explorer, Properties, rescan a folder, move to the Recycle Bin. Export to JSON (CSV from the CLI). Optional watching for changes.
 - Hard links counted once; compressed, sparse, offline and link entries flagged; links and other volumes never entered.
