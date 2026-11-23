@@ -33,6 +33,9 @@ pub struct StorageSettings {
     pub duplicate_min_kib: u64,
     /// Keep a local cleanup history.
     pub keep_cleanup_history: bool,
+    /// Free the disk index after the window has been hidden (in the tray) this many
+    /// minutes; 0 keeps it while Reclaim runs.
+    pub release_index_after_min: u32,
 }
 
 impl Default for StorageSettings {
@@ -46,6 +49,7 @@ impl Default for StorageSettings {
             allocated_sizes: true,
             duplicate_min_kib: 1024,
             keep_cleanup_history: true,
+            release_index_after_min: 10,
         }
     }
 }

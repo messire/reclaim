@@ -44,7 +44,7 @@ pub struct Node {
     first_child: NodeId,
     child_count: u32,
     name_off: u32,
-    name_len: u32,
+    name_len: u16,
     /// Kind.
     pub kind: Kind,
     /// Attributes and index flags.
@@ -55,11 +55,17 @@ pub struct Node {
     pub logical: u64,
     /// Allocated bytes (directory: sum over the subtree, hard links counted once).
     pub allocated: u64,
-    /// Last write time, Unix seconds.
-    pub mtime: i64,
+    /// Last write time, Unix seconds, stored unsigned in 32 bits (1970–2106; earlier
+    /// times read as 0, "unknown"). Kept small: one record per file on the drive.
+    mtime_s: u32,
 }
 
 impl Node {
+    /// Last write time, Unix seconds (0 when unknown or before 1970).
+    pub fn mtime(&self) -> i64 {
+        i64::from(self.mtime_s)
+    }
+
     /// Size under a basis.
     pub fn size(&self, basis: SizeBasis) -> u64 {
         match basis {
@@ -88,6 +94,14 @@ pub struct DirCounts {
     pub dirs: u64,
     /// Directories below that could not be read.
     pub errors: u64,
+}
+
+/// Stored form of [`DirCounts`]: 32-bit counters (4 billion entries per subtree).
+#[derive(Debug, Clone, Copy, Default)]
+struct Counts {
+    files: u32,
+    dirs: u32,
+    errors: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -172,7 +186,7 @@ pub struct Tree {
     style: PathStyle,
     nodes: Vec<Node>,
     names: String,
-    counts: Vec<DirCounts>,
+    counts: Vec<Counts>,
     exts: Extensions,
     links: Vec<LinkKey>,
     link_dups: Vec<NodeId>,
@@ -198,7 +212,7 @@ impl Tree {
             dead: 0,
             allocated_estimated: false,
         };
-        t.counts.push(DirCounts::default());
+        t.counts.push(Counts::default());
         t.nodes.push(Node {
             parent: NONE,
             first_child: NONE,
@@ -210,7 +224,7 @@ impl Tree {
             aux: 0,
             logical: 0,
             allocated: 0,
-            mtime: 0,
+            mtime_s: 0,
         });
         t
     }
@@ -235,11 +249,33 @@ impl Tree {
         self.nodes.len() as u64 - 1 - self.dead
     }
 
+    /// Gives back the spare capacity the arrays grew into during a scan (up to half of
+    /// them). Call when a scan or refresh has finished; later inserts grow them again.
+    pub fn shrink_to_fit(&mut self) {
+        self.nodes.shrink_to_fit();
+        self.names.shrink_to_fit();
+        self.counts.shrink_to_fit();
+        self.links.shrink_to_fit();
+        self.link_dups.shrink_to_fit();
+        self.errors.shrink_to_fit();
+    }
+
+    /// Heap use split as (node records, names, directory counters, hard-link table) in
+    /// bytes, by capacity (benchmarks).
+    pub fn memory_parts(&self) -> (usize, usize, usize, usize) {
+        (
+            self.nodes.capacity() * std::mem::size_of::<Node>(),
+            self.names.capacity(),
+            self.counts.capacity() * std::mem::size_of::<Counts>(),
+            self.links.capacity() * std::mem::size_of::<LinkKey>() + self.link_dups.capacity() * 4,
+        )
+    }
+
     /// Approximate heap use of the index in bytes (benchmarks, About).
     pub fn memory_bytes(&self) -> usize {
         self.nodes.capacity() * std::mem::size_of::<Node>()
             + self.names.capacity()
-            + self.counts.capacity() * std::mem::size_of::<DirCounts>()
+            + self.counts.capacity() * std::mem::size_of::<Counts>()
             + self.links.capacity() * std::mem::size_of::<LinkKey>()
             + self.link_dups.capacity() * 4
     }
@@ -257,7 +293,7 @@ impl Tree {
     /// The name of a node (roots: the full path as given).
     pub fn name(&self, id: NodeId) -> &str {
         let n = self.node(id);
-        &self.names[n.name_off as usize..(n.name_off + n.name_len) as usize]
+        &self.names[n.name_off as usize..n.name_off as usize + usize::from(n.name_len)]
     }
 
     /// Interned extensions.
@@ -275,7 +311,12 @@ impl Tree {
     pub fn counts(&self, id: NodeId) -> DirCounts {
         let n = self.node(id);
         if n.kind == Kind::Dir {
-            self.counts[n.aux as usize]
+            let c = self.counts[n.aux as usize];
+            DirCounts {
+                files: u64::from(c.files),
+                dirs: u64::from(c.dirs),
+                errors: u64::from(c.errors),
+            }
         } else {
             DirCounts::default()
         }
@@ -430,16 +471,22 @@ impl Tree {
         }
     }
 
-    fn push_name(&mut self, name: &str) -> (u32, u32) {
+    fn push_name(&mut self, name: &str) -> (u32, u16) {
+        // File names are at most 255 UTF-16 units (≤ 765 bytes); only a pathological root
+        // path could be longer, and it is cut at a character boundary.
+        let mut end = name.len().min(usize::from(u16::MAX));
+        while !name.is_char_boundary(end) {
+            end -= 1;
+        }
         let off = self.names.len() as u32;
-        self.names.push_str(name);
-        (off, name.len() as u32)
+        self.names.push_str(&name[..end]);
+        (off, end as u16)
     }
 
     fn new_node(&mut self, parent: NodeId, e: &EntryMeta) -> Node {
         let (name_off, name_len) = self.push_name(&e.name);
         let aux = if e.kind == Kind::Dir {
-            self.counts.push(DirCounts::default());
+            self.counts.push(Counts::default());
             (self.counts.len() - 1) as u32
         } else {
             self.exts.intern(&extension_of(&e.name))
@@ -475,7 +522,7 @@ impl Tree {
             aux,
             logical,
             allocated,
-            mtime: e.mtime,
+            mtime_s: u32::try_from(e.mtime.max(0)).unwrap_or(u32::MAX),
         }
     }
 
@@ -566,9 +613,9 @@ impl Tree {
             let aux = n.aux as usize;
             let parent = n.parent;
             let c = &mut self.counts[aux];
-            c.files = (c.files as i64 + df).max(0) as u64;
-            c.dirs = (c.dirs as i64 + dd).max(0) as u64;
-            c.errors = (c.errors as i64 + de).max(0) as u64;
+            c.files = (i64::from(c.files) + df).clamp(0, i64::from(u32::MAX)) as u32;
+            c.dirs = (i64::from(c.dirs) + dd).clamp(0, i64::from(u32::MAX)) as u32;
+            c.errors = (i64::from(c.errors) + de).clamp(0, i64::from(u32::MAX)) as u32;
             cur = parent;
         }
     }

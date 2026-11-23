@@ -141,7 +141,7 @@ pub enum SortKey {
 pub fn sort_nodes(t: &Tree, ids: &mut [NodeId], key: SortKey, basis: SizeBasis, ascending: bool) {
     match key {
         SortKey::Size => ids.sort_by_key(|&i| (t.node(i).size(basis), i)),
-        SortKey::Modified => ids.sort_by_key(|&i| (t.node(i).mtime, i)),
+        SortKey::Modified => ids.sort_by_key(|&i| (t.node(i).mtime(), i)),
         SortKey::Extension => ids.sort_by(|&a, &b| {
             t.extensions()
                 .name(t.ext_id(a))
@@ -327,8 +327,8 @@ impl Filter {
         if self.min_size.is_some_and(|m| size < m) || self.max_size.is_some_and(|m| size > m) {
             return false;
         }
-        if self.modified_after.is_some_and(|m| n.mtime < m)
-            || self.modified_before.is_some_and(|m| n.mtime > m)
+        if self.modified_after.is_some_and(|m| n.mtime() < m)
+            || self.modified_before.is_some_and(|m| n.mtime() > m)
         {
             return false;
         }

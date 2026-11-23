@@ -252,6 +252,31 @@ fn selection_rectangle_follows_the_selection() {
 }
 
 #[test]
+fn index_is_freed_on_request_and_scans_again() {
+    let (mut s, rx, _) = scanned();
+    assert_eq!(s.release_after_min(), 10);
+    assert!(s.has_index());
+    assert!(s.release_index());
+    assert!(!s.has_index());
+    assert!(s.tree_rows().is_empty());
+    assert!(s.tiles().is_empty());
+    assert_eq!(
+        s.tree().read().unwrap().len(),
+        1,
+        "only the top node is left"
+    );
+    let st = s.status();
+    assert!(!st.has_index && st.line.contains("freed"));
+    // Nothing to free twice.
+    assert!(!s.release_index());
+    s.scan(vec!["/r".into()]);
+    // Not while a scan runs.
+    assert!(!s.release_index());
+    pump(&mut s, &rx, |s| !s.scanning());
+    assert!(s.has_index() && !s.tree_rows().is_empty());
+}
+
+#[test]
 fn search_runs_without_rescan() {
     let (mut s, rx, _) = scanned();
     let form = SearchForm {
@@ -483,10 +508,14 @@ fn settings_validate_and_switch_basis() {
     form.scan_threads = "999".into();
     assert!(s.save_settings(&form).is_err());
     form.scan_threads = "2".into();
+    form.release_index_after_min = "2000".into();
+    assert!(s.save_settings(&form).is_err());
+    form.release_index_after_min = "0".into();
     form.allocated_sizes = false;
     form.scan_exclusions = "node_modules\n\n*.tmp".into();
     s.save_settings(&form).unwrap();
     assert_eq!(s.settings().scan_threads, 2);
+    assert_eq!(s.release_after_min(), 0);
     assert_eq!(s.settings().scan_exclusions, vec!["node_modules", "*.tmp"]);
     // Logical sizes now: the 1-byte file shows as 1 B.
     let rows = s.tree_rows().to_vec();

@@ -29,7 +29,7 @@ Generated tree (`storage-bench --runs 3`): 20 000 files of 1–8 KiB in 417 fold
 |---|---|
 | Scan, 1 thread (median of 3) | 172.1 ms |
 | Scan, 4 threads (median of 3) | 77.3 ms |
-| Index memory | 9.8 MB for 100 792 nodes (≈ 97 bytes per entry) |
+| Index memory | 9.8 MB for 100 792 nodes (≈ 97 bytes per entry); 6.5 MB (≈ 64 bytes) since 2026-11-23, see below |
 | Treemap layout 1200×700 | 1.66 ms, 3 259 cells |
 | Search `*.log` | 30.4 ms |
 
@@ -74,3 +74,26 @@ file system cache, not threading.
 
 Fast NTFS scan of the whole `C:` volume: 1 215 935 files, 210 461 folders, 0 orphans, 34.7 s.
 A folder-by-folder scan of the same volume was not measured, so there is no comparison.
+
+## Index memory, 2026-11-23
+
+A scan of a whole system drive (6.07 million files, 1.42 million folders) left Reclaim
+at 666–759 MB, almost all of it the index (about 100 bytes per entry). Changes:
+
+- node record 56 → 48 bytes (name length in 16 bits, last write time in 32 bits);
+- directory counters 24 → 12 bytes;
+- the arrays drop their growth slack when a scan finishes (`Tree::shrink_to_fit`);
+- the whole index is freed after the window has been in the tray for a set time
+  (default 10 minutes, Settings), and must be scanned again.
+
+`storage-bench --path /usr` in the Linux container (same tree as above), `index_parts`:
+
+| | Before | After |
+|---|---|---|
+| Node records | 7.3 MB (capacity) | 4.8 MB |
+| Names | 2.1 MB (capacity) | 1.5 MB |
+| Directory counters | 0.39 MB | 0.11 MB |
+| Bytes per entry | 97.5 | 64.2 |
+
+The saving on a Windows drive depends on name lengths and on how much slack the arrays
+had when the scan ended; it has not been measured there yet.

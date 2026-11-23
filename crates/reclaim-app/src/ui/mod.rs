@@ -41,6 +41,8 @@ struct App {
     watcher: Option<(Vec<reclaim_storage_windows::watch::Watcher>, slint::Timer)>,
     watch_on: bool,
     storage_message: String,
+    /// Frees the disk index after the window has been hidden for a while.
+    release_timer: Option<slint::Timer>,
 }
 
 thread_local! {
@@ -278,6 +280,7 @@ fn dark_title_bar(attempt: u32) {
         match h.as_raw() {
             RawWindowHandle::Win32(h) => {
                 win::dark_caption(h.hwnd.get());
+                win::set_icons(h.hwnd.get());
                 Some(())
             }
             _ => None,
@@ -302,6 +305,7 @@ fn open_window() {
         }
         let r = a.state.set_visible(true);
         a.react(r);
+        a.release_timer = None;
         if let Some(w) = &a.window {
             let _ = w.show();
             w.window().set_minimized(false);
@@ -324,6 +328,7 @@ fn hide_window() {
         let r = a.state.set_visible(false);
         a.react(r);
     });
+    arm_index_release(None);
     slint::Timer::single_shot(Duration::ZERO, || {
         let w = with(|a| {
             if a.state.visible() {
@@ -334,6 +339,46 @@ fn hide_window() {
         });
         drop(w);
     });
+}
+
+/// While the window stays hidden, frees the disk index after the configured minutes
+/// (`delay` overrides it for a retry). A running scan or removal postpones it by a minute.
+fn arm_index_release(delay: Option<Duration>) {
+    let delay = delay.or_else(|| {
+        with(|a| {
+            a.storage
+                .as_ref()
+                .map(|s| s.release_after_min())
+                .filter(|m| *m > 0)
+                .map(|m| Duration::from_secs(u64::from(m) * 60))
+        })
+        .flatten()
+    });
+    let Some(delay) = delay else { return };
+    let timer = slint::Timer::default();
+    timer.start(slint::TimerMode::SingleShot, delay, || {
+        let retry = with(|a| {
+            a.release_timer = None;
+            if a.state.visible() {
+                return false;
+            }
+            let Some(s) = &mut a.storage else {
+                return false;
+            };
+            if !s.has_index() {
+                return false;
+            }
+            a.stop_watch();
+            match &mut a.storage {
+                Some(s) => !s.release_index(),
+                None => false,
+            }
+        });
+        if retry == Some(true) {
+            arm_index_release(Some(Duration::from_secs(60)));
+        }
+    });
+    with(|a| a.release_timer = Some(timer));
 }
 
 /// Signals `--ready-event` after the first frame of the first window (startup marker for
@@ -444,6 +489,7 @@ pub fn run() -> i32 {
             watcher: None,
             watch_on: false,
             storage_message: String::new(),
+            release_timer: None,
         });
     });
 
