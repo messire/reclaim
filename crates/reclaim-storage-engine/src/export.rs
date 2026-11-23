@@ -217,7 +217,7 @@ pub fn json(
             allocated_bytes: n.allocated,
             files: c.files,
             dirs: c.dirs,
-            modified_unix: n.mtime,
+            modified_unix: n.mtime(),
             flags: flags(n.attrs),
         };
         if !first {
@@ -288,7 +288,7 @@ pub fn csv(
             n.allocated,
             c.files,
             c.dirs,
-            n.mtime,
+            n.mtime(),
             flags(n.attrs).join("|")
         )
     })?;

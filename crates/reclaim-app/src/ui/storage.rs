@@ -397,6 +397,7 @@ impl App {
             w.set_ss_fast(f.fast_ntfs_scan);
             w.set_ss_allocated(f.allocated_sizes);
             w.set_ss_dup_min(f.duplicate_min_kib.into());
+            w.set_ss_release(f.release_index_after_min.into());
             w.set_ss_history(f.keep_cleanup_history);
             w.set_ss_fast_available(s.fast_scan_available());
             w.set_ss_message(self.storage_message.as_str().into());
@@ -439,6 +440,7 @@ fn storage_form(w: &MainWindow) -> StorageForm {
         allocated_sizes: w.get_ss_allocated(),
         duplicate_min_kib: w.get_ss_dup_min().into(),
         keep_cleanup_history: w.get_ss_history(),
+        release_index_after_min: w.get_ss_release().into(),
     }
 }
 

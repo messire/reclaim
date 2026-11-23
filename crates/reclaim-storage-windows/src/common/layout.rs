@@ -635,7 +635,7 @@ mod tests {
         let t = tree.read().unwrap();
         let f = t.find("C:\\Users\\Long file name.txt").unwrap();
         let n = t.node(f);
-        assert_eq!((n.logical, n.allocated, n.mtime), (5000, 8192 + 4096, 2));
+        assert_eq!((n.logical, n.allocated, n.mtime()), (5000, 8192 + 4096, 2));
         assert!(n.attrs.has(Attrs::HIDDEN));
         assert!(t.find("C:\\Users\\LONGFI~1.TXT").is_none());
         assert_eq!(t.node(t.find("C:\\Users\\j").unwrap()).kind, Kind::Link);

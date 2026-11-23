@@ -403,6 +403,8 @@ pub struct StorageForm {
     pub duplicate_min_kib: String,
     /// Keep cleanup history.
     pub keep_cleanup_history: bool,
+    /// Minutes in the tray before the index is freed (0 = never).
+    pub release_index_after_min: String,
 }
 
 impl StorageForm {
@@ -416,6 +418,7 @@ impl StorageForm {
             allocated_sizes: s.allocated_sizes,
             duplicate_min_kib: s.duplicate_min_kib.to_string(),
             keep_cleanup_history: s.keep_cleanup_history,
+            release_index_after_min: s.release_index_after_min.to_string(),
         }
     }
 
@@ -440,6 +443,13 @@ impl StorageForm {
             .trim()
             .parse()
             .map_err(|_| "Duplicate minimum size: enter a whole number of KiB.")?;
+        let release: u32 = self
+            .release_index_after_min
+            .trim()
+            .parse()
+            .ok()
+            .filter(|n| *n <= 1440)
+            .ok_or("Free the disk index after: enter 0 (never) to 1440 minutes.")?;
         Ok(StorageSettings {
             scan_exclusions: lines(&self.scan_exclusions),
             cleanup_exclusions: lines(&self.cleanup_exclusions),
@@ -448,6 +458,7 @@ impl StorageForm {
             allocated_sizes: self.allocated_sizes,
             duplicate_min_kib: min_kib,
             keep_cleanup_history: self.keep_cleanup_history,
+            release_index_after_min: release,
             ..base.clone()
         })
     }
@@ -1326,6 +1337,63 @@ impl Storage {
         self.scan.is_some()
     }
 
+    /// Whether a disk index is held (scanned or scanning).
+    pub fn has_index(&self) -> bool {
+        self.has_index
+    }
+
+    /// Minutes the window may stay hidden before the index is freed (0 = never).
+    pub fn release_after_min(&self) -> u32 {
+        self.settings.release_index_after_min
+    }
+
+    /// Whether [`Self::release_index`] would free the index now: one is held and no scan,
+    /// duplicate search, removal or confirmation is in progress.
+    pub fn can_release_index(&self) -> bool {
+        let busy = self.scan.is_some()
+            || self.removing
+            || self.pending.is_some()
+            || self.dupes.cancel.is_some();
+        self.has_index && !busy
+    }
+
+    /// Frees the disk index (the window has been hidden for a while): the tree, map, lists,
+    /// search and duplicate results go, and memory returns to what the rest of Reclaim
+    /// uses. Nothing happens while a scan, a duplicate search or a removal is running, or
+    /// a confirmation is open. Returns whether the index was freed.
+    pub fn release_index(&mut self) -> bool {
+        if !self.can_release_index() {
+            return false;
+        }
+        // Late events of earlier jobs refer to the old index and are ignored.
+        self.job += 1;
+        self.search_gen += 1;
+        let style = self.platform.fs.style();
+        self.tree = Arc::new(RwLock::new(Tree::new(style)));
+        self.has_index = false;
+        self.summary = None;
+        self.note = None;
+        self.stale = false;
+        self.fast_used = false;
+        self.analysis = Analysis::default();
+        self.expanded.clear();
+        self.more.clear();
+        self.rows = Vec::new();
+        self.selected = None;
+        self.zoom = TOP;
+        self.back.clear();
+        self.forward.clear();
+        self.cells = Vec::new();
+        self.search = None;
+        self.search_message.clear();
+        self.dupes = DupState::default();
+        self.message = format!(
+            "The disk index was freed after {} min in the tray to give the memory back. Scan again to see disk usage.",
+            self.settings.release_index_after_min
+        );
+        true
+    }
+
     // ---- Events --------------------------------------------------------------------
 
     /// Applies a background event.
@@ -1358,6 +1426,11 @@ impl Storage {
                 }
                 let refresh = self.scan.as_ref().is_some_and(|s| s.refresh);
                 self.scan = None;
+                // The index stays in memory as long as it is shown: drop the growth slack.
+                self.tree
+                    .write()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .shrink_to_fit();
                 if !refresh {
                     self.fast_used = fast;
                     self.note = note;
@@ -1891,8 +1964,8 @@ impl Storage {
                         name: t.name(id).to_owned(),
                         detail: t.path(id),
                         size: bytes(n.size(basis)),
-                        extra: if n.mtime > 0 {
-                            date_time(Millis(n.mtime as u64 * 1000), self.utc_offset_min)
+                        extra: if n.mtime() > 0 {
+                            date_time(Millis(n.mtime() as u64 * 1000), self.utc_offset_min)
                         } else {
                             String::new()
                         },
@@ -2187,8 +2260,8 @@ impl Storage {
                 } else {
                     String::new()
                 },
-                modified: if n.mtime > 0 {
-                    date_time(Millis(n.mtime as u64 * 1000), self.utc_offset_min)
+                modified: if n.mtime() > 0 {
+                    date_time(Millis(n.mtime() as u64 * 1000), self.utc_offset_min)
                 } else {
                     String::new()
                 },
@@ -2341,10 +2414,10 @@ impl Storage {
                 d.push_str(&format!(", {} unreadable", count(c.errors)));
             }
         }
-        if n.mtime > 0 {
+        if n.mtime() > 0 {
             d.push_str(&format!(
                 "\nModified {}",
-                date_time(Millis(n.mtime as u64 * 1000), self.utc_offset_min)
+                date_time(Millis(n.mtime() as u64 * 1000), self.utc_offset_min)
             ));
         }
         let f = flags_text(n.attrs);
@@ -2428,7 +2501,7 @@ impl Storage {
                             file_id: None,
                             // A file rewritten since the scan is skipped; a folder's time
                             // changes with its contents, so it is not compared.
-                            mtime: (!n.is_dir()).then_some(n.mtime),
+                            mtime: (!n.is_dir()).then_some(n.mtime()),
                             allocated: n.allocated,
                             is_dir: n.is_dir(),
                         },
