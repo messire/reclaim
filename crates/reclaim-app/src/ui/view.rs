@@ -75,6 +75,8 @@ slint::slint! {
         selected: bool,
         enabled: bool,
         focused: bool,
+        // 0 none, 1 waiting its turn, 2 being examined or cleaned now.
+        activity: int,
     }
 
     export struct CandRow {
@@ -361,6 +363,65 @@ slint::slint! {
         touch := TouchArea {
             mouse-cursor: pointer;
             clicked => { root.clicked(); }
+        }
+    }
+
+    // Drawn check box: a font glyph (☑/☐) is missing from Consolas and showed as
+    // nothing, so the box and the tick are a rectangle and a stroked path.
+    component Check inherits Rectangle {
+        in property <bool> checked;
+        in property <bool> enabled: true;
+        in property <color> on-color: Theme.accent;
+        width: 14px;
+        height: 14px;
+        border-radius: 2px;
+        border-width: 1.5px;
+        border-color: !root.enabled ? Theme.dim : root.checked ? root.on-color : Theme.muted;
+        background: root.checked ? (root.enabled ? root.on-color : Theme.dim) : transparent;
+        if root.checked : Path {
+            width: 14px;
+            height: 14px;
+            viewbox-width: 14;
+            viewbox-height: 14;
+            commands: "M 3 7.2 L 6 10 L 11 4";
+            fill: transparent;
+            stroke: Theme.bg;
+            stroke-width: 2px;
+        }
+    }
+
+    // Work indicator of a list row: a dot circling a faint ring while the row is being
+    // worked on (state 2), a small hollow ring while it waits its turn (state 1).
+    component Activity inherits Rectangle {
+        in property <int> state;
+        private property <float> phase: root.state == 2 ? Math.mod(animation-tick() / 1ms, 900) / 900 : 0;
+        width: 16px;
+        height: 16px;
+        if root.state == 2 : Rectangle {
+            width: 12px;
+            height: 12px;
+            x: 2px;
+            y: 2px;
+            border-radius: 6px;
+            border-width: 2px;
+            border-color: #3fe3f24d;
+        }
+        if root.state == 2 : Rectangle {
+            width: 5px;
+            height: 5px;
+            border-radius: 2.5px;
+            background: Theme.accent;
+            x: 5.5px + 5px * Math.cos(root.phase * 360deg);
+            y: 5.5px + 5px * Math.sin(root.phase * 360deg);
+        }
+        if root.state == 1 : Rectangle {
+            width: 6px;
+            height: 6px;
+            x: 5px;
+            y: 5px;
+            border-radius: 3px;
+            border-width: 1px;
+            border-color: Theme.dim;
         }
     }
 
@@ -1539,12 +1600,14 @@ slint::slint! {
                                             padding-left: 6px;
                                             padding-right: Theme.scrollbar-gap;
                                             spacing: 10px;
-                                            Text {
+                                            Rectangle {
                                                 width: 18px;
-                                                text: c.selected ? "☑" : "☐";
-                                                font-size: 15px;
-                                                color: !c.enabled ? Theme.dim : c.selected ? Theme.accent : Theme.muted;
-                                                vertical-alignment: center;
+                                                Check {
+                                                    x: (parent.width - self.width) / 2;
+                                                    y: (parent.height - self.height) / 2;
+                                                    checked: c.selected;
+                                                    enabled: c.enabled;
+                                                }
                                                 TouchArea {
                                                     enabled: c.enabled;
                                                     mouse-cursor: pointer;
@@ -1562,7 +1625,11 @@ slint::slint! {
                                                     overflow: elide;
                                                 }
                                             }
-                                            Text { text: c.size; color: Theme.amber; vertical-alignment: center; horizontal-alignment: right; }
+                                            Text { text: c.size; color: c.activity == 0 ? Theme.amber : Theme.dim; vertical-alignment: center; horizontal-alignment: right; }
+                                            Rectangle {
+                                                width: 16px;
+                                                Activity { y: (parent.height - self.height) / 2; state: c.activity; }
+                                            }
                                         }
                                         Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
                                     }
@@ -1593,7 +1660,7 @@ slint::slint! {
                                         HorizontalLayout {
                                             padding-right: Theme.scrollbar-gap;
                                             spacing: 8px;
-                                            Text { width: 16px; text: f.selected ? "☑" : "☐"; color: f.selected ? Theme.accent : Theme.muted; vertical-alignment: center; }
+                                            Rectangle { width: 16px; Check { y: (parent.height - self.height) / 2; checked: f.selected; } }
                                             Text { horizontal-stretch: 1; preferred-width: 0; text: f.path; color: Theme.text; overflow: elide; vertical-alignment: center; }
                                             Text { width: 90px; text: f.size; color: Theme.amber; horizontal-alignment: right; vertical-alignment: center; }
                                             Text { width: 120px; text: f.modified; color: Theme.dim; horizontal-alignment: right; vertical-alignment: center; }
@@ -1653,7 +1720,7 @@ slint::slint! {
                                         padding-left: d.header ? 0px : 18px;
                                         padding-right: Theme.scrollbar-gap;
                                         spacing: 8px;
-                                        if !d.header : Text { width: 16px; text: d.marked ? "☑" : "☐"; color: d.marked ? Theme.warn : Theme.muted; vertical-alignment: center; }
+                                        if !d.header : Rectangle { width: 16px; Check { y: (parent.height - self.height) / 2; checked: d.marked; on-color: Theme.warn; } }
                                         Text {
                                             horizontal-stretch: 1;
                                             preferred-width: 0;

@@ -357,7 +357,7 @@ fn cleanup(args: &[String], out: &mut dyn Write) -> Res {
         if selectable {
             plan.entries.push(PlanEntry {
                 category: cat,
-                scan: s,
+                scan: std::sync::Arc::new(s),
                 selected: None,
             });
         }

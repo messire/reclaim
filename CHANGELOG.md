@@ -2,6 +2,11 @@
 
 Versions follow the rule in [README → Versioning](README.md#versioning): patch for fixes only, minor for new features (and, while 0.x, breaking changes), major from 1.0.0 for breaking changes.
 
+## [0.3.2] — cleanup fixes
+- Cleanup no longer freezes the window on large runs: progress is reported a few times a second instead of after every file, and the selection is no longer copied on every update (100 000+ files made each update slower than the next).
+- Nothing is pre-selected after *Examine*; each category is ticked by hand. The check boxes are drawn instead of using a font character that Consolas lacks, so they are visible (also in the per-file list and Duplicates). The confirmation names the selected categories, and a single one by name.
+- During *Examine* and cleaning, the row being worked on shows a spinning indicator and the rows still to do show *waiting*; the status line names the current category.
+
 ## [0.3.1] — folder dialog fix
 - Disk usage: the *Browse…* folder dialog opens centred over the window and in front of it; before, it could open behind the window and the app looked frozen.
 

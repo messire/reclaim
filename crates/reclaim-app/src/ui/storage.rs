@@ -329,6 +329,7 @@ impl App {
                         selected: c.selected,
                         enabled: c.enabled,
                         focused: c.focused,
+                        activity: i32::from(c.activity),
                     })
                     .collect(),
             ));
