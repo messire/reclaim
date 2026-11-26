@@ -449,11 +449,25 @@ fn cleanup_examines_selects_confirms_and_reports() {
             .contains("Examining changes nothing")
     );
     s.cleanup_scan();
-    assert!(s.cleanup_view().busy);
+    let v = s.cleanup_view();
+    assert!(v.busy);
+    // Results arrive through the event channel, so nothing is examined yet: the first
+    // category is being examined, the others wait their turn.
+    assert_eq!(v.categories[0].activity, 2);
+    assert!(v.categories[1..].iter().all(|c| c.activity == 1));
     pump(&mut s, &rx, |s| !s.cleanup_view().busy);
     let v = s.cleanup_view();
+    assert!(v.categories.iter().all(|c| c.activity == 0));
+    assert!(
+        v.categories.iter().all(|c| !c.selected),
+        "nothing is selected until the user ticks it"
+    );
+    assert!(!v.can_clean);
+    s.cleanup_toggle("user-temp");
+    let v = s.cleanup_view();
     let temp = v.categories.iter().find(|c| c.id == "user-temp").unwrap();
-    assert!(temp.selected, "safe categories with files start selected");
+    assert!(temp.selected);
+    assert!(v.status.contains("in 1 category"), "{}", v.status);
     assert!(f.exists("/tmp/me/old.tmp"), "examining deletes nothing");
 
     // Review categories are chosen file by file.
@@ -485,6 +499,12 @@ fn cleanup_examines_selects_confirms_and_reports() {
 
     s.request_cleanup();
     let c = s.confirm_view().unwrap().clone();
+    assert!(c.title.contains("Temporary files"), "{}", c.title);
+    assert!(
+        !c.title.contains("categories"),
+        "one category ticked: {}",
+        c.title
+    );
     assert!(c.danger);
     assert!(c.body.contains("permanently"));
     s.confirm();

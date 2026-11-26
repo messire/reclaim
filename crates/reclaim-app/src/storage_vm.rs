@@ -660,6 +660,9 @@ pub struct CategoryView {
     pub enabled: bool,
     /// Focused (details shown).
     pub focused: bool,
+    /// Work on this category: 0 none, 1 waiting its turn, 2 being examined or cleaned
+    /// now.
+    pub activity: u8,
 }
 
 /// Candidate file row of a review category.
@@ -765,7 +768,7 @@ struct ScanJob {
 
 #[derive(Debug, Default)]
 struct CleanupState {
-    scans: BTreeMap<String, CategoryScan>,
+    scans: BTreeMap<String, Arc<CategoryScan>>,
     /// Selected category ids.
     selected: BTreeSet<String>,
     /// Per-file selection of review categories.
@@ -773,6 +776,8 @@ struct CleanupState {
     focused: Option<String>,
     discovering: bool,
     running: Option<CleanupProgress>,
+    /// Category ids of the running plan, in execution order.
+    running_ids: Vec<&'static str>,
     cancel: Option<Arc<AtomicBool>>,
     report: Option<CleanupReport>,
 }
@@ -1470,16 +1475,10 @@ impl Storage {
                 }
             }
             StorageEvent::CleanupFound(scan) => {
+                // Nothing is selected for the user: every category is ticked by hand,
+                // so the confirmation names exactly what was chosen.
                 let id = scan.id.clone();
-                let cat = WINDOWS_CATEGORIES.iter().find(|c| c.id == id);
-                if let Some(c) = cat
-                    && c.default_selected
-                    && c.safety != Safety::Review
-                    && (scan.files() > 0 || c.action == Action::WindowsCleanup)
-                {
-                    self.cleanup.selected.insert(id.clone());
-                }
-                self.cleanup.scans.insert(id, scan);
+                self.cleanup.scans.insert(id, Arc::new(scan));
                 StorageDirty {
                     cleanup: true,
                     ..StorageDirty::default()
@@ -1504,6 +1503,7 @@ impl Storage {
             }
             StorageEvent::CleanupDone(report) => {
                 self.cleanup.running = None;
+                self.cleanup.running_ids.clear();
                 self.cleanup.cancel = None;
                 if self.settings.keep_cleanup_history
                     && let Some(st) = &self.platform.store
@@ -2730,7 +2730,7 @@ impl Storage {
             };
             entries.push(PlanEntry {
                 category: cat,
-                scan: scan.clone(),
+                scan: Arc::clone(scan),
                 selected,
             });
         }
@@ -2786,11 +2786,17 @@ impl Storage {
             "\nEstimated space freed: {}. Each file is checked again right before it is removed; files in use, changed or protected are skipped and reported.",
             bytes(plan.estimate())
         ));
+        let names: Vec<&str> = plan.entries.iter().map(|e| e.category.name).collect();
+        body = format!("Selected: {}.\n\n{body}", names.join(", "));
         let danger = plan.deletes_permanently();
         self.pending = Some((
             Pending::Clean,
             ConfirmView {
-                title: format!("Clean {} selected categories?", plan.entries.len()),
+                title: if plan.entries.len() == 1 {
+                    format!("Clean \"{}\"?", plan.entries[0].category.name)
+                } else {
+                    format!("Clean {} selected categories?", plan.entries.len())
+                },
                 body,
                 ok: if danger {
                     "Delete".into()
@@ -2811,6 +2817,7 @@ impl Storage {
         let cancel = Arc::new(AtomicBool::new(false));
         self.cleanup.cancel = Some(cancel.clone());
         self.cleanup.running = Some(CleanupProgress::default());
+        self.cleanup.running_ids = plan.entries.iter().map(|e| e.category.id).collect();
         let p = self.platform.clone();
         let notify = self.notify.clone();
         let spawned = std::thread::Builder::new()
@@ -2824,6 +2831,7 @@ impl Storage {
             });
         if spawned.is_err() {
             self.cleanup.running = None;
+            self.cleanup.running_ids.clear();
             self.cleanup.cancel = None;
         }
     }
@@ -2847,11 +2855,36 @@ impl Storage {
             busy: c.discovering || c.running.is_some(),
             ..CleanupView::default()
         };
+        // Discovery examines the categories in list order, so the one being examined
+        // is the first without a result.
+        let examining = if c.discovering {
+            WINDOWS_CATEGORIES
+                .iter()
+                .find(|x| !c.scans.contains_key(x.id))
+                .map(|x| x.id)
+        } else {
+            None
+        };
+        let cleaning = c.running.map(|p| p.entry);
         for cat in WINDOWS_CATEGORIES {
             let scan = c.scans.get(cat.id);
             let chosen = c.files.get(cat.id);
+            let activity = if let Some(at) = cleaning {
+                match c.running_ids.iter().position(|x| *x == cat.id) {
+                    Some(i) if i == at => 2,
+                    Some(i) if i > at => 1,
+                    _ => 0,
+                }
+            } else if examining == Some(cat.id) {
+                2
+            } else if c.discovering && scan.is_none() {
+                1
+            } else {
+                0
+            };
             let (size, files) = match scan {
-                None if c.discovering => ("examining…".to_owned(), String::new()),
+                None if activity == 2 => ("examining…".to_owned(), String::new()),
+                None if c.discovering => ("waiting".to_owned(), String::new()),
                 None => ("not examined".to_owned(), String::new()),
                 Some(_) if cat.action == Action::WindowsCleanup => {
                     ("opens Windows Disk Cleanup".to_owned(), String::new())
@@ -2905,6 +2938,7 @@ impl Storage {
                 selected: c.selected.contains(cat.id),
                 enabled,
                 focused: c.focused.as_deref() == Some(cat.id),
+                activity,
             });
         }
         if let Some(id) = &c.focused
@@ -2988,20 +3022,39 @@ impl Storage {
             } else {
                 p.done as f32 / p.total as f32
             };
-            format!("Cleaning: {} of {}", count(p.done), count(p.total))
-        } else if c.discovering {
+            let name = c
+                .running_ids
+                .get(p.entry)
+                .and_then(|id| WINDOWS_CATEGORIES.iter().find(|x| x.id == *id))
+                .map_or("", |x| x.name);
             format!(
-                "Examining categories ({} of {}); nothing is changed",
-                c.scans.len(),
+                "Cleaning {name}: {} of {} files",
+                count(p.done),
+                count(p.total)
+            )
+        } else if c.discovering {
+            let name = examining
+                .and_then(|id| WINDOWS_CATEGORIES.iter().find(|x| x.id == id))
+                .map_or("", |x| x.name);
+            format!(
+                "Examining {name} ({} of {}); nothing is changed",
+                (c.scans.len() + 1).min(WINDOWS_CATEGORIES.len()),
                 WINDOWS_CATEGORIES.len()
             )
         } else if c.scans.is_empty() {
             "Press Examine to measure each category. Examining changes nothing.".into()
+        } else if plan.entries.is_empty() {
+            "Tick the categories to clean; nothing is selected yet.".into()
         } else {
             format!(
-                "Selected: {} estimated in {} categories{}",
+                "Selected: {} estimated in {} {}{}",
                 bytes(plan.estimate()),
                 plan.entries.len(),
+                if plan.entries.len() == 1 {
+                    "category"
+                } else {
+                    "categories"
+                },
                 if plan.to_recycle() > 0 {
                     format!(", {} to the Recycle Bin", bytes(plan.to_recycle()))
                 } else {

@@ -6,8 +6,10 @@
 //! port), the result report and the free-space measurement. Review and confirmation
 //! are the UI's and CLI's job; nothing here deletes without a plan.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashSet, VecDeque};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use reclaim_storage_core::cleanup::{
     Action, Candidate, Category, CategoryResult, CategoryScan, CleanupReport, FoundRoot,
@@ -172,8 +174,9 @@ pub fn discover(
 pub struct PlanEntry {
     /// The category.
     pub category: &'static Category,
-    /// Discovery result.
-    pub scan: CategoryScan,
+    /// Discovery result (shared: a plan is built from the examined scans often, and a
+    /// scan can list hundreds of thousands of files).
+    pub scan: Arc<CategoryScan>,
     /// Indices of the selected candidates (`None`: all of them).
     pub selected: Option<Vec<usize>>,
 }
@@ -252,7 +255,13 @@ pub struct CleanupProgress {
     pub done: u64,
     /// Targets in the plan.
     pub total: u64,
+    /// Index of the plan entry being processed.
+    pub entry: usize,
 }
+
+/// Least time between two progress reports while files are removed: one report per
+/// file floods the UI thread on large plans (100 000+ files).
+const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
@@ -304,7 +313,10 @@ pub fn execute(
     let total = plan.files();
     let mut done = 0u64;
     let mut seen = HashSet::new();
-    for e in &plan.entries {
+    let mut last: Instant;
+    for (entry, e) in plan.entries.iter().enumerate() {
+        on_progress(CleanupProgress { done, total, entry });
+        last = Instant::now();
         let mut res = CategoryResult {
             id: e.category.id.to_owned(),
             ..CategoryResult::default()
@@ -343,15 +355,17 @@ pub fn execute(
                     }
                     res.add(&c.path, &outcome);
                     done += 1;
-                    on_progress(CleanupProgress { done, total });
+                    if last.elapsed() >= PROGRESS_EVERY {
+                        on_progress(CleanupProgress { done, total, entry });
+                        last = Instant::now();
+                    }
                 }
                 // Remove directories emptied by the cleanup, deepest first, never the
                 // location root itself.
-                let mut pending: Vec<(String, usize)> =
+                let mut pending: VecDeque<(String, usize)> =
                     dirs.into_iter().map(|(_, p, r)| (p, r)).collect();
                 let mut tried = HashSet::new();
-                while let Some((dir, r)) = pending.first().cloned() {
-                    pending.remove(0);
+                while let Some((dir, r)) = pending.pop_front() {
                     if !tried.insert(dir.clone()) {
                         continue;
                     }
@@ -361,7 +375,7 @@ pub fn execute(
                     if remover.remove_empty_dir(&dir, root, guard) {
                         res.dirs_removed += 1;
                         if let Some(p) = parent_of(&dir) {
-                            pending.push((p.to_owned(), r));
+                            pending.push_back((p.to_owned(), r));
                         }
                     }
                 }
@@ -384,6 +398,11 @@ pub fn execute(
         }
         report.categories.push(res);
     }
+    on_progress(CleanupProgress {
+        done,
+        total,
+        entry: plan.entries.len().saturating_sub(1),
+    });
 
     for (root, before) in vols {
         if let Some(v) = volumes.volume_of(&root) {
@@ -574,7 +593,7 @@ mod tests {
                     let c = category(id).unwrap();
                     PlanEntry {
                         category: c,
-                        scan: discover(c, &kf(), f, f, &guard(), &opts(), &no),
+                        scan: Arc::new(discover(c, &kf(), f, f, &guard(), &opts(), &no)),
                         selected: None,
                     }
                 })
@@ -699,7 +718,7 @@ mod tests {
         let plan = CleanupPlan {
             entries: vec![PlanEntry {
                 category: category("user-temp").unwrap(),
-                scan: bad,
+                scan: Arc::new(bad),
                 selected: None,
             }],
         };
